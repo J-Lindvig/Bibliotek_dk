@@ -1,0 +1,27 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Device is already configured"
+        },
+        "error": {
+            "user_exist": "Brugeren er allerede oprettet",
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "Unexpected error"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "name": "Navn på bruger",
+                    "municipality": "Kommune",
+                    "user_id": "CPR eller lånernummer",
+                    "pincode": "PIN kode",
+                    "update_interval": "Opdateringsinterval i minutter",
+                    "show_loans": "Vis lån",
+                    "show_reservations": "Vis reservationer",
+                    "show_reservations_ready": "Vis reservationer klar til afhentning"
+                }
+            }
+        }
+    }
+}

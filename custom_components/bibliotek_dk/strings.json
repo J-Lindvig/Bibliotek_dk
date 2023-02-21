@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "name": "[%key:common::config_flow::data::name%]",
+          "municipality": "[%key:common::config_flow::data::municipality%]",
+          "user_id": "[%key:common::config_flow::data::user_id%]",
+          "pincode": "[%key:common::config_flow::data::pincode%]",
+          "update_interval": "[%key:common::config_flow::data::update_interval%]",
+          "show_loans": "[%key:common::config_flow::data::show_loans%]",
+          "show_reservations": "[%key:common::config_flow::data::show_reservations%]",
+          "show_reservations_ready": "[%key:common::config_flow::data::show_reservations_ready%]"
+        }
+      }
+    },
+    "error": {
+      "user_exist": "[%key:common::config_flow::error::user_exist%]",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  }
+}
