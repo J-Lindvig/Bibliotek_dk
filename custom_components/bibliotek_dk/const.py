@@ -1,4 +1,3 @@
-"""Constants for the Dummy Garage integration."""
 CONF_HOST = "host"
 CONF_MUNICIPALITY = "municipality"
 CONF_NAME = "name"

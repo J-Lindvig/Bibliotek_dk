@@ -51,8 +51,10 @@ async def validate_input(
         data[CONF_UPDATE_INTERVAL] if data[CONF_UPDATE_INTERVAL] else UPDATE_INTERVAL
     )
 
-    # Check if user exist
+    # If there is any other instances of the integration
     if DOMAIN in hass.data:
+
+        # Test if the new user exist
         if any(
             libraryObj.user.userId == data[CONF_USER_ID]
             and libraryObj.host == data[CONF_HOST]
@@ -60,16 +62,17 @@ async def validate_input(
         ):
             raise UserExist
 
-    # Only run one instance at a time, wait noone is "running"
-    if DOMAIN in hass.data:
+        # If instance is running wait...
         while any(
             libraryObj.running == True for libraryObj in hass.data[DOMAIN].values()
         ):
             await asyncio.sleep(random.randint(5, 10))
-        # Then test the login, by logging in
+
     myLibrary = Library(data[CONF_USER_ID], data[CONF_PINCODE], data[CONF_HOST])
+    # Try to login to test the credentails
     if not await hass.async_add_executor_job(myLibrary.login):
         raise InvalidAuth
+    del myLibrary
 
     # Return info that you want to store in the config entry.
     title = (
@@ -110,6 +113,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     #                    "branchId": library["branchId"],
                     CONF_HOST: m.group(),
                 }
+                print(m.group())
 
             return libraries
 
