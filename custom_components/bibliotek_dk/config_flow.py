@@ -110,10 +110,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 p = re.compile("^.+?[^\/:](?=[?\/]|$)")
                 m = p.match(library["registrationUrl"])
                 libraries[library[CONF_NAME]] = {
-                    #                    "branchId": library["branchId"],
+                    "agency": library["branchId"],
                     CONF_HOST: m.group(),
                 }
-                print(m.group())
 
             return libraries
 

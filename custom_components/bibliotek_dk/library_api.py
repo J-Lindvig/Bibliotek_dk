@@ -4,8 +4,9 @@ from bs4 import BeautifulSoup as BS
 from datetime import datetime
 import json
 import logging
+import re
 import requests
-
+import time
 
 from .const import (
     HEADERS,
@@ -22,6 +23,7 @@ DEBTS = "DEBTS"
 LOANS = "LOANS"
 LOANS_OVERDUE = "LOANS_OVERDUE"
 LOGGED_IN = "logget ind"
+LOGGED_IN_ELIB = "Logged-in"
 LOGOUT = "LOGOUT"
 MY_PAGES = "MY_PAGES"
 RESERVATIONS = "RESERVATIONS"
@@ -34,16 +36,16 @@ Dict of URLs from the user profile page.
 Key is taken from the constants. Default value is the string to look for in the HTML
 """
 URLS = {
-    # 	CHECKLIST: "min liste", # JS
-    DEBTS: "betal",
-    LOANS: "lån",
-    LOANS_OVERDUE: "over",
-    LOGOUT: "log",
+    # 	CHECKLIST: "/user/me/checklist", # JS
+    DEBTS: "/user/me/status-debts",
+    LOANS: "/user/me/status-loans",
+    LOANS_OVERDUE: "/user/me/status-loans-overdue",
+    LOGOUT: "/user/logout",
     MY_PAGES: "/user/me/view",
-    RESERVATIONS: "reserveringer i",
-    RESERVATIONS_READY: "reserveringer klar",
-    # 	SEARCHES: "mine gemte", # JS
-    USER_PROFILE: "bruger",
+    RESERVATIONS: "/user/me/status-reservations",
+    RESERVATIONS_READY: "/user/me/status-reservations-ready",
+    # 	SEARCHES: "/user/me/followed-searches", # JS
+    USER_PROFILE: "/user/me/edit",
 }
 
 _LOGGER: logging.Logger = logging.getLogger(__package__)
@@ -59,7 +61,7 @@ class Library:
     session.headers = HEADERS
 
     host, libraryName, user = None, None, None
-    loggedIn, updatedUrls, running = False, False, False
+    loggedIn, eLoggedIn, updatedUrls, running = False, False, False, False
 
     """
     Initialize of Library takes these arguments:
@@ -98,9 +100,13 @@ class Library:
                 self.fetchUserInfo()
 
             # Fetch the states of the user
-            self.fetchLoans()
-            self.fetchReservations()
-            self.fetchReservationsReady()
+            self.user.loans = self.fetchLoans()
+            self.user.reservations = self.fetchReservations()
+            self.user.reservationsReady = self.fetchReservationsReady()
+
+            # If any loans, set the nextExpireDate to the first loan in the list
+            if self.user.loans:
+                self.user.nextExpireDate = self.user.loans[0].expireDate
 
             self.logout()
 
@@ -143,6 +149,20 @@ class Library:
         # Return the datetime
         return datetime.strptime(f"{d} {m} {y}", format).date()
 
+    def sortLists(self):
+        # Sort the loans by expireDate and the Title
+        self.user.loans.sort(key=lambda obj: (obj.expireDate, obj.title))
+        # Sort the reservations
+        self.user.reservations.sort(
+            key=lambda obj: (
+                obj.queueNumber,
+                obj.createdDate,
+                obj.title,
+            )
+        )
+        # Sort the reservations
+        self.user.reservationsReady.sort(key=lambda obj: (obj.pickupDate, obj.title))
+
     def _getMaterials(self, soup, noodle="div[class*='material-item']"):
         return soup.select(noodle)
 
@@ -169,17 +189,22 @@ class Library:
 
         return materialTitle, materialCreators, materialType
 
+    # Loop <li>
+    # (re)Join the class(es) with a " ", use as key
     def _getDetails(self, material):
         details = {}
         for li in material.find_all("li"):
             # Use last element in class ad key
-            details[li["class"][-1]] = li.select_one(
+            #            details[li["class"][-1]] = li.select_one(
+            #                "div[class=item-information-data]"
+            #            ).string
+            details[" ".join(li["class"])] = li.select_one(
                 "div[class=item-information-data]"
             ).string
-        return details
+
+        return details.items()
 
     ####  PRIVATE END  ####
-
     def login(self):
         # Test if we are logged in by fetching the main page
         # This is done manually, since we are using the response later
@@ -236,27 +261,27 @@ class Library:
 
     # Fetch the links to the different pages from the "My Pages page
     def fetchUserLinks(self):
-        # Fetch "My view"
+        # # Fetch "My view"
         soup = self._fetchPage(self.host + URLS[MY_PAGES])
 
-        # Find all <a> within a <ul> with a specific class
-        urls = soup.select_one("ul[class=main-menu-third-level]").find_all("a")
-        _LOGGER.debug(f"HTML:\n{urls}")
-        for url in urls:
-            # Only work on URLs not allready in our dict
-            if not url["href"] in URLS.values():
-                # Search for key and value
-                # if the text of the URL starts with our value
-                # update the list at the key
-                for key, value in URLS.items():
-                    if not self.updatedUrls:
-                        self.updatedUrls = True
-                    if url.text.lower().startswith(value):
-                        URLS[key] = (
-                            url["href"]
-                            if url["href"].startswith("/")
-                            else url["href"] + "/"
-                        )
+        # # Find all <a> within a <ul> with a specific class
+        # urls = soup.select_one("ul[class=main-menu-third-level]").find_all("a")
+        # _LOGGER.debug(f"HTML:\n{urls}")
+        # for url in urls:
+        #     # Only work on URLs not allready in our dict
+        #     if not url["href"] in URLS.values():
+        #         # Search for key and value
+        #         # if the text of the URL starts with our value
+        #         # update the list at the key
+        #         for key, value in URLS.items():
+        #             if not self.updatedUrls:
+        #                 self.updatedUrls = True
+        #             if url.text.lower().startswith(value):
+        #                 URLS[key] = (
+        #                     url["href"]
+        #                     if url["href"].startswith("/")
+        #                     else url["href"] + "/"
+        #                 )
 
         if DEBUG:
             urlList = {}
@@ -318,15 +343,14 @@ class Library:
                 break
 
     # Get the loans with all possible details
-    def fetchLoans(self):
-        # Reset the loans
-        self.user.loans = []
-
+    def fetchLoans(self, soup=None):
         # Fetch the loans page
-        soup = self._fetchPage(self.host + URLS[LOANS])
+        if not soup:
+            soup = self._fetchPage(self.host + URLS[LOANS])
 
         # From the <div> containing part of the class
         # for material in soup.select("div[class*='material-item']"):
+        tempList = []
         for material in self._getMaterials(soup):
             # Create an instance of libraryLoan
             obj = libraryLoan()
@@ -341,32 +365,26 @@ class Library:
             obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
 
             # Details
-            for key, value in self._getDetails(material).items():
-                if key == "loan-date":
+            for keys, value in self._getDetails(material):
+                if "loan-date" in keys:
                     obj.loanDate = self._getDatetime(value)
-                elif key == "expire-date":
+                elif "expire-date" in keys:
                     obj.expireDate = self._getDatetime(value)
-                elif key == "material-number":
+                elif "material-number" in keys:
                     obj.id = value
 
             # Add the loan to the stack
-            self.user.loans.append(obj)
+            tempList.append(obj)
+        #            self.user.loans.append(obj)
 
-        # Sort the loans by expireDate and the Title
-        self.user.loans.sort(key=lambda obj: (obj.expireDate, obj.title))
-
-        # If any loans, set the nextExpireDate to the first loan in the list
-        if self.user.loans:
-            self.user.nextExpireDate = self.user.loans[0].expireDate
+        return tempList
 
     # Get the current reservations
     def fetchReservations(self):
-        # Reset the reservations
-        self.user.reservations = []
-
         # Fecth the reservations page
         soup = self._fetchPage(self.host + URLS[RESERVATIONS])
 
+        tempList = []
         # From the <div> with containg the class of the materials
         for material in self._getMaterials(soup):
             # Create a instance of libraryReservation
@@ -382,36 +400,27 @@ class Library:
             obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
 
             # Details
-            for key, value in self._getDetails(material).items():
-                if key == "expire-date":
+            for keys, value in self._getDetails(material):
+                if "expire-date" in keys:
                     obj.expireDate = self._getDatetime(value)
-                elif key == "created-date":
+                elif "created-date" in keys:
                     obj.createdDate = self._getDatetime(value)
-                elif key == "queue-number":
+                elif "queue-number" in keys:
                     obj.queueNumber = value
-                elif key == "pickup-branch":
+                elif "pickup-branch" in keys:
                     obj.pickupLibrary = value
 
             # Add the reservation to the stack
-            self.user.reservations.append(obj)
+            tempList.append(obj)
 
-            # Sort the reservations
-            self.user.reservations.sort(
-                key=lambda obj: (
-                    obj.queueNumber,
-                    obj.createdDate,
-                    obj.title,
-                )
-            )
+        return tempList
 
     # Get the reservations which are ready
     def fetchReservationsReady(self):
-        # Reset the reservationsReady
-        self.user.reservationsReady = []
-
         # Fecth the ready reservationsReady page
         soup = self._fetchPage(self.host + URLS[RESERVATIONS_READY])
 
+        tempList = []
         # From the <div> with the materials
         for material in self._getMaterials(soup):
             # Create a instance of libraryReservationReady
@@ -427,23 +436,20 @@ class Library:
             obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
 
             # Details
-            for key, value in self._getDetails(material).items():
-                if key == "pickup-id":
+            for keys, value in self._getDetails(material):
+                if "pickup-id" in keys:
                     obj.reservationNumber = value
-                elif key == "pickup-date":
+                elif "pickup-date" in keys:
                     obj.pickupDate = self._getDatetime(value)
-                elif key == "created-date":
+                elif "created-date" in keys:
                     obj.createdDate = self._getDatetime(value)
-                elif key == "pickup-branch":
+                elif "pickup-branch" in keys:
                     obj.pickupLibrary = value
 
             # Add the reservation to the stack
-            self.user.reservationsReady.append(obj)
+            tempList.append(obj)
 
-            # Sort the reservations
-            self.user.reservationsReady.sort(
-                key=lambda obj: (obj.pickupDate, obj.title)
-            )
+        return tempList
 
 
 class libraryUser:
@@ -478,3 +484,7 @@ class libraryReservation(libraryMaterial):
 class libraryReservationReady(libraryMaterial):
     createdDate, pickupDate, reservationNumber = None, None, None
     pickupLibrary = None
+
+
+class libraryEbook(libraryMaterial):
+    loanDate, expireDate = None, None
