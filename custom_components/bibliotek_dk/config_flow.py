@@ -51,9 +51,16 @@ async def validate_input(
         data[CONF_UPDATE_INTERVAL] if data[CONF_UPDATE_INTERVAL] else UPDATE_INTERVAL
     )
 
+    # Typecast userId and Pincode to string:
+    data[CONF_USER_ID] = str(data[CONF_USER_ID])
+    data[CONF_PINCODE] = str(data[CONF_PINCODE])
+
+    # Check length of Pincode
+    if len(data[CONF_PINCODE]) != 4:
+        raise PincodeLength
+
     # If there is any other instances of the integration
     if DOMAIN in hass.data:
-
         # Test if the new user exist
         if any(
             libraryObj.user.userId == data[CONF_USER_ID]
@@ -145,6 +152,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await validate_input(self.hass, user_input, libraries)
+            except PincodeLength:
+                errors["base"] = "pincode_length"
             except UserExist:
                 errors["base"] = "user_exist"
             except CannotConnect:
@@ -170,8 +179,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         ),
                     ),
-                    vol.Required(CONF_USER_ID): str,
-                    vol.Required(CONF_PINCODE): str,
+                    vol.Required(CONF_USER_ID, default=""): int,
+                    vol.Required(CONF_PINCODE, default=""): int,
                     vol.Required(CONF_SHOW_LOANS, default=True): bool,
                     vol.Required(CONF_SHOW_RESERVATIONS, default=True): bool,
                     vol.Required(CONF_SHOW_RESERVATIONS_READY, default=True): bool,
@@ -180,6 +189,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
+
+
+class PincodeLength(HomeAssistantError):
+    """Error in the length of the Pincode."""
 
 
 class UserExist(HomeAssistantError):

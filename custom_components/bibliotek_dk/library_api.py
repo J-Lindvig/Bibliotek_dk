@@ -4,14 +4,11 @@ from bs4 import BeautifulSoup as BS
 from datetime import datetime
 import json
 import logging
-import re
+import random
 import requests
-import time
 
-from .const import (
-    HEADERS,
-    URL_LOGIN_PAGE,
-)
+
+from .const import HEADERS, URL_LOGIN_PAGE, USER_AGENTS
 
 DEBUG = True
 
@@ -57,11 +54,8 @@ Library holds the engine of the scraping.
 
 
 class Library:
-    session = requests.Session()
-    session.headers = HEADERS
-
     host, libraryName, user = None, None, None
-    loggedIn, eLoggedIn, updatedUrls, running = False, False, False, False
+    loggedIn, running = False, False
 
     """
     Initialize of Library takes these arguments:
@@ -91,9 +85,7 @@ class Library:
         self.running = True
 
         if self.login():
-            # Only fetch the URLs once
-            if not self.updatedUrls:
-                self.fetchUserLinks()
+            self.fetchUserLinks()  # Soon obsolete....
 
             # Only fetch user info once
             if not self.user.name:
@@ -163,19 +155,19 @@ class Library:
         # Sort the reservations
         self.user.reservationsReady.sort(key=lambda obj: (obj.pickupDate, obj.title))
 
-    def _getMaterials(self, soup, noodle="div[class*='material-item']"):
+    def _getMaterials(self, soup, noodle="div[class*='material-item']") -> BS:
         return soup.select(noodle)
 
-    def _getIdInfo(self, material):
+    def _getIdInfo(self, material) -> tuple:
         return material.input["value"], not "disabled" in material.input.attrs
 
-    def _getMaterialUrls(self, material):
+    def _getMaterialUrls(self, material) -> tuple:
         return (
             self.host + material.a["href"] if material.a else "",
             material.img["src"] if material.img else "",
         )
 
-    def _getMaterialInfo(self, material):
+    def _getMaterialInfo(self, material) -> tuple:
         # Some title have the type in "()", remove it
         # by splitting the string by the first "(" and use
         # only the first element, stripping whitespaces
@@ -194,10 +186,6 @@ class Library:
     def _getDetails(self, material):
         details = {}
         for li in material.find_all("li"):
-            # Use last element in class ad key
-            #            details[li["class"][-1]] = li.select_one(
-            #                "div[class=item-information-data]"
-            #            ).string
             details[" ".join(li["class"])] = li.select_one(
                 "div[class=item-information-data]"
             ).string
@@ -206,6 +194,12 @@ class Library:
 
     ####  PRIVATE END  ####
     def login(self):
+
+        # Prepare a new session with a random user-agent
+        self.session = requests.Session()
+        HEADERS["User-Agent"] = random.choice(USER_AGENTS)
+        self.session.headers = HEADERS
+
         # Test if we are logged in by fetching the main page
         # This is done manually, since we are using the response later
         r = self.session.get(self.host)
@@ -258,30 +252,13 @@ class Library:
             self.loggedIn = (
                 not self.session.get(self.host + URLS[LOGOUT]).status_code == 200
             )
+            if not self.loggedIn:
+                self.session.close()
 
     # Fetch the links to the different pages from the "My Pages page
     def fetchUserLinks(self):
         # # Fetch "My view"
         soup = self._fetchPage(self.host + URLS[MY_PAGES])
-
-        # # Find all <a> within a <ul> with a specific class
-        # urls = soup.select_one("ul[class=main-menu-third-level]").find_all("a")
-        # _LOGGER.debug(f"HTML:\n{urls}")
-        # for url in urls:
-        #     # Only work on URLs not allready in our dict
-        #     if not url["href"] in URLS.values():
-        #         # Search for key and value
-        #         # if the text of the URL starts with our value
-        #         # update the list at the key
-        #         for key, value in URLS.items():
-        #             if not self.updatedUrls:
-        #                 self.updatedUrls = True
-        #             if url.text.lower().startswith(value):
-        #                 URLS[key] = (
-        #                     url["href"]
-        #                     if url["href"].startswith("/")
-        #                     else url["href"] + "/"
-        #                 )
 
         if DEBUG:
             urlList = {}
