@@ -7,7 +7,6 @@ import logging
 import random
 import requests
 
-
 from .const import HEADERS, URL_LOGIN_PAGE, USER_AGENTS
 
 DEBUG = True
@@ -340,6 +339,8 @@ class Library:
 
             # Type, title and creator
             obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
+
+            print(f"{obj.title}: {obj.coverUrl}")
 
             # Details
             for keys, value in self._getDetails(material):

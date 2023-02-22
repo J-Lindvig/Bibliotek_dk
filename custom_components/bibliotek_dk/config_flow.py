@@ -52,8 +52,8 @@ async def validate_input(
     )
 
     # Typecast userId and Pincode to string:
-    data[CONF_USER_ID] = str(data[CONF_USER_ID])
-    data[CONF_PINCODE] = str(data[CONF_PINCODE])
+    data[CONF_USER_ID] = re.sub("\D", "", data[CONF_USER_ID])
+    data[CONF_PINCODE] = re.sub("\D", "", data[CONF_PINCODE])
 
     # Check length of Pincode
     if len(data[CONF_PINCODE]) != 4:
@@ -179,8 +179,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         ),
                     ),
-                    vol.Required(CONF_USER_ID, default=""): int,
-                    vol.Required(CONF_PINCODE, default=""): int,
+                    vol.Required(CONF_USER_ID, default=""): str,
+                    vol.Required(CONF_PINCODE, default=""): str,
                     vol.Required(CONF_SHOW_LOANS, default=True): bool,
                     vol.Required(CONF_SHOW_RESERVATIONS, default=True): bool,
                     vol.Required(CONF_SHOW_RESERVATIONS_READY, default=True): bool,
