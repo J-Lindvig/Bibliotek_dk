@@ -211,8 +211,23 @@ class Library:
         # only the first element, stripping whitespaces
         materialTitle = material.h3.string.split("(")[0].strip()
 
+        # Assume it is a physical loan
         materialType = material.select_one("div[class=item-material-type]")
-        materialType = materialType.string if materialType else ""
+        if materialType:
+            materialType = materialType.string
+        # Ok, maybe it is a digital
+        else:
+            materialType = material.select_one("span[class*='icon']")
+            if materialType:
+                result = re.search(
+                    "This material is a (.+?) and", materialType["aria-label"]
+                )
+                # Yes, it is a digital
+                if result:
+                    materialType = result.group(1)
+            # I have no idea...
+            else:
+                materialType = ""
 
         materialCreators = material.select_one("div[class=item-creators]")
         materialCreators = materialCreators.string if materialCreators else ""
