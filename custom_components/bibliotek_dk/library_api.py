@@ -2,41 +2,48 @@ from __future__ import annotations
 
 from bs4 import BeautifulSoup as BS
 from datetime import datetime
-import json
 import logging
 import random
+import re
 import requests
 
-from .const import HEADERS, URL_LOGIN_PAGE, USER_AGENTS
+from .const import (
+    CONF_AGENCY,
+    HEADERS,
+    URL_LOGIN_PAGE,
+    URL_LOGIN_PAGE_ELIB,
+    USER_AGENTS,
+)
 
 DEBUG = True
 
-"""
-# Constants used in multiple functions, primarily as string keys in dict.
-"""
+#### KEYS
 # CHECKLIST = "CHECKLIST"	# JS
 DEBTS = "DEBTS"
 LOANS = "LOANS"
 LOANS_OVERDUE = "LOANS_OVERDUE"
-LOGGED_IN = "logget ind"
-LOGGED_IN_ELIB = "Logged-in"
 LOGOUT = "LOGOUT"
+LOGOUT_ELIB = "LOGOUT_ELIB"
 MY_PAGES = "MY_PAGES"
 RESERVATIONS = "RESERVATIONS"
 RESERVATIONS_READY = "RESERVATIONS_READY"
 # SEARCHES = "SEARCHES"		# JS
 USER_PROFILE = "USER_PROFILE"
 
-"""
-Dict of URLs from the user profile page.
-Key is taken from the constants. Default value is the string to look for in the HTML
-"""
+#### SEARCH STRINGS
+LOGGED_IN = "logget ind"
+LOGGED_IN_ELIB = "Logged-in"
+EBOOKS = "ebøger"
+AUDIO_BOOKS = "lydbøger"
+
+#### LINKS TO USER PAGES
 URLS = {
     # 	CHECKLIST: "/user/me/checklist", # JS
     DEBTS: "/user/me/status-debts",
     LOANS: "/user/me/status-loans",
     LOANS_OVERDUE: "/user/me/status-loans-overdue",
     LOGOUT: "/user/logout",
+    LOGOUT_ELIB: "/user/me/logout",
     MY_PAGES: "/user/me/view",
     RESERVATIONS: "/user/me/status-reservations",
     RESERVATIONS_READY: "/user/me/status-reservations-ready",
@@ -54,27 +61,32 @@ Library holds the engine of the scraping.
 
 class Library:
     host, libraryName, user = None, None, None
-    loggedIn, running = False, False
+    loggedIn, eLoggedIn, running = False, False, False
 
     """
-    Initialize of Library takes these arguments:
+	Initialize of Library takes these arguments:
 
-    userId: (CPR-number) or Loaner-ID
-    pincode: Pincode
-    host, URL to your local library
+	userId: (CPR-number) or Loaner-ID
+	pincode: Pincode
+	host, URL to your local library
 
-    A libraryUser object is created from the credentials.
-    """
+	A libraryUser object is created from the credentials.
+	"""
 
-    def __init__(self, userId: str, pincode: str, host=str) -> None:
+    def __init__(
+        self, userId: str, pincode: str, host=str, libraryName=None, agency=None
+    ) -> None:
+
+        # Prepare a new session with a random user-agent
+        HEADERS["User-Agent"] = random.choice(USER_AGENTS)
+        self.session = requests.Session()
+        self.session.headers = HEADERS
+
         self.host = host
+        self.host_elib = "https://ereolen.dk"
         self.user = libraryUser(userId=userId, pincode=pincode)
-
-        if DEBUG:
-            _LOGGER.debug("*" * 40)
-            _LOGGER.debug(
-                f"__init__ called with the arguments: userId = '{userId}', pincode = '{pincode}', host = '{host}'"
-            )
+        self.municipality = libraryName
+        self.agency = agency
 
     # The update function is called from the coordinator from Home Assistant
     def update(self):
@@ -95,11 +107,26 @@ class Library:
             self.user.reservations = self.fetchReservations()
             self.user.reservationsReady = self.fetchReservationsReady()
 
+            # Logout
+            self.logout()
+
+            # eReolen
+            if self.municipality and self.agency:
+                loginResult, soup = self.login_eLib()
+                if loginResult:
+                    if soup:
+                        self.fecthELibUsedQuota(soup)
+                        self.user.loans.extend(self.fetchLoans(soup))
+
+                    # Logout of eReolen
+                    self.logout(self.host_elib + URLS[LOGOUT_ELIB])
+
+            # Sort the lists
+            self.sortLists()
+
             # If any loans, set the nextExpireDate to the first loan in the list
             if self.user.loans:
                 self.user.nextExpireDate = self.user.loans[0].expireDate
-
-            self.logout()
 
         self.running = False
 
@@ -124,10 +151,16 @@ class Library:
     def _titleInSoup(self, soup, string) -> bool:
         return string.lower() in soup.title.string.lower()
 
-    # Convert ex. "22. maj 2023" to a datetime object
+    # Convert ex. "22. maj 2023 [23:12:45]" to a datetime object
     def _getDatetime(self, date, format="%d. %b %Y") -> datetime:
-        # Split the string by " ", store in separate elements
-        d, m, y = date.split(" ")
+        # Split the string by the " "
+        date = date.split(" ")
+
+        # Extract time if present (ebooks etc.)
+        t = date.pop() if len(date) == 4 else None
+
+        # Unpack into separate elements
+        d, m, y = date
         # Cut the name of the month to the first 3 chars
         m = m[:3]
         # Change the few danish month to english
@@ -137,8 +170,14 @@ class Library:
         elif key == "okt":
             m = "oct"
 
-        # Return the datetime
-        return datetime.strptime(f"{d} {m} {y}", format).date()
+        # Create a datetime with the date
+        date = datetime.strptime(f"{d} {m} {y}", format)
+        # If Time is present, add it to the date
+        if t:
+            h, m, s = t.split(":")
+            return date.replace(hour=int(h), minute=int(m), second=int(s))
+        # Return the date
+        return date
 
     def sortLists(self):
         # Sort the loans by expireDate and the Title
@@ -194,11 +233,6 @@ class Library:
     ####  PRIVATE END  ####
     def login(self):
 
-        # Prepare a new session with a random user-agent
-        self.session = requests.Session()
-        HEADERS["User-Agent"] = random.choice(USER_AGENTS)
-        self.session.headers = HEADERS
-
         # Test if we are logged in by fetching the main page
         # This is done manually, since we are using the response later
         r = self.session.get(self.host)
@@ -239,32 +273,62 @@ class Library:
             self.loggedIn = self._titleInSoup(soup, LOGGED_IN)
             self.libraryName = soup.title.string.split("|")[0].strip()  # REDUNDANT
 
-        if DEBUG:
-            _LOGGER.debug("*" * 40)
-            _LOGGER.debug(f"Logged in ({self.loggedIn}) at {self.libraryName}")
-
         return self.loggedIn
 
-    def logout(self):
+    def login_eLib(self) -> tuple:
+        # Make sure we are logged OUT
+        if self.loggedIn:
+            self.logout()
+            return self.login_eLib()
+
+        # Test if we are logged in at eReolen.dk
+        r = self.session.get(self.host_elib)
+        soup = BS(r.text, "html.parser")
+        if r.status_code == 200:
+            self.eLoggedIn = self._titleInSoup(soup, LOGGED_IN_ELIB)
+
+        if not self.loggedIn:
+            r = self.session.get(self.host_elib + URL_LOGIN_PAGE_ELIB)
+            soup = BS(r.text, "html.parser")
+
+            payload = self.user.userInfo
+            payload[CONF_AGENCY] = self.agency
+
+            libraryFormToken = soup.select_one("input[name*=libraryName-]")
+            if libraryFormToken:
+                payload[libraryFormToken["name"]] = self.municipality
+
+            # Send the payload aka LOGIN
+            soup = self._fetchPage(
+                soup.form["action"].replace("/login", r.url), payload
+            )
+            self.loggedIn = soup if self._titleInSoup(soup, LOGGED_IN_ELIB) else False
+
+        return self.loggedIn, soup
+
+    def logout(self, url=None):
+        url = self.host + URLS[LOGOUT] if not url else url
         if self.loggedIn:
             # Fetch the logout page, if given a 200 (true) reverse it to false
-            self.loggedIn = (
-                not self.session.get(self.host + URLS[LOGOUT]).status_code == 200
-            )
+            self.loggedIn = not self.session.get(url).status_code == 200
             if not self.loggedIn:
                 self.session.close()
+
+    def fecthELibUsedQuota(self, soup):
+        for li in soup.h1.parent.div.ul.find_all("li"):
+            result = re.search("(\d+) ud af (\d+) (ebøger|lydbøger)", li.string)
+            if result:
+                if result.group(3) == EBOOKS:
+                    self.user.eBooks = result.group(1)
+                    self.user.eBooksQuota = result.group(2)
+                elif result.group(3) == AUDIO_BOOKS:
+                    self.user.audioBooks = result.group(1)
+                    self.user.audioBooksQuota = result.group(2)
 
     # Fetch the links to the different pages from the "My Pages page
     def fetchUserLinks(self):
         # # Fetch "My view"
         soup = self._fetchPage(self.host + URLS[MY_PAGES])
-
-        if DEBUG:
-            urlList = {}
-            _LOGGER.debug("*" * 40)
-            for key, url in URLS.items():
-                urlList[key] = self.host + url
-            _LOGGER.debug("URLS:\n" + json.dumps(urlList, indent=4))
 
         # Fetch usefull user states - OBSOLETE WHEN FETCHING DETAILS
         for a_status in soup.select_one("ul[class='list-links specials']").find_all(
@@ -340,8 +404,6 @@ class Library:
             # Type, title and creator
             obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
 
-            print(f"{obj.title}: {obj.coverUrl}")
-
             # Details
             for keys, value in self._getDetails(material):
                 if "loan-date" in keys:
@@ -353,7 +415,6 @@ class Library:
 
             # Add the loan to the stack
             tempList.append(obj)
-        #            self.user.loans.append(obj)
 
         return tempList
 
@@ -434,7 +495,8 @@ class libraryUser:
     userInfo = None
     name, address = None, None
     phone, phoneNotify, mail, mailNotify = None, None, None, None
-    reservations, reservationsReady, loans, debts = [], [], [], None
+    loans, reservations, reservationsReady, debts = [], [], [], None
+    eBooks, eBooksQuota, audioBooks, audioBooksQuota = 0, 0, 0, 0
     nextExpireDate = None
     pickupLibrary = None
 
@@ -462,7 +524,3 @@ class libraryReservation(libraryMaterial):
 class libraryReservationReady(libraryMaterial):
     createdDate, pickupDate, reservationNumber = None, None, None
     pickupLibrary = None
-
-
-class libraryEbook(libraryMaterial):
-    loanDate, expireDate = None, None

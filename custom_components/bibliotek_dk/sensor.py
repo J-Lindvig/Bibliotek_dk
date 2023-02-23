@@ -120,7 +120,7 @@ class LibrarySensor(SensorEntity):
     @property
     def state(self):
         if len(self.myLibrary.user.loans) > 0:
-            return (self.myLibrary.user.nextExpireDate - datetime.now().date()).days
+            return (self.myLibrary.user.nextExpireDate - datetime.now()).days
         return ""
 
     @property
@@ -140,6 +140,17 @@ class LibrarySensor(SensorEntity):
             ATTR_UNIT_OF_MEASUREMENT: "days",
             ATTR_ATTRIBUTION: CREDITS,
         }
+        # If agency is set, bring eReolen
+        if self.myLibrary.agency:
+            attr.update(
+                {
+                    "ebooks": self.myLibrary.user.eBooks,
+                    "ebooks_quota": self.myLibrary.user.eBooksQuota,
+                    "audiobooks": self.myLibrary.user.audioBooks,
+                    "audiobooks_quota": self.myLibrary.user.audioBooksQuota,
+                }
+            )
+
         return attr
 
     @property

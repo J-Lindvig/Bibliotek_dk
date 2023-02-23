@@ -21,10 +21,13 @@ import voluptuous as vol
 
 
 from .const import (
+    CONF_AGENCY,
+    CONF_BRANCH_ID,
     CONF_HOST,
     CONF_MUNICIPALITY,
     CONF_NAME,
     CONF_PINCODE,
+    CONF_SHOW_E_LIBRARY,
     CONF_SHOW_LOANS,
     CONF_SHOW_RESERVATIONS,
     CONF_SHOW_RESERVATIONS_READY,
@@ -49,6 +52,13 @@ async def validate_input(
     data[CONF_HOST] = libraries[data[CONF_MUNICIPALITY]][CONF_HOST]
     data[CONF_UPDATE_INTERVAL] = (
         data[CONF_UPDATE_INTERVAL] if data[CONF_UPDATE_INTERVAL] else UPDATE_INTERVAL
+    )
+
+    # Add agency for ereolen.dk if boolean is set
+    data[CONF_AGENCY] = (
+        libraries[data[CONF_MUNICIPALITY]][CONF_AGENCY]
+        if data[CONF_SHOW_E_LIBRARY]
+        else None
     )
 
     # Typecast userId and Pincode to string:
@@ -87,6 +97,7 @@ async def validate_input(
         if data[CONF_NAME]
         else data[CONF_MUNICIPALITY]
     )
+    print(data)
     return {"title": title, "data": data}
 
 
@@ -117,7 +128,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 p = re.compile("^.+?[^\/:](?=[?\/]|$)")
                 m = p.match(library["registrationUrl"])
                 libraries[library[CONF_NAME]] = {
-                    "agency": library["branchId"],
+                    CONF_AGENCY: library[CONF_BRANCH_ID],
                     CONF_HOST: m.group(),
                 }
 
@@ -181,6 +192,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                     vol.Required(CONF_USER_ID, default=""): str,
                     vol.Required(CONF_PINCODE, default=""): str,
+                    vol.Required(CONF_SHOW_E_LIBRARY, default=True): bool,
                     vol.Required(CONF_SHOW_LOANS, default=True): bool,
                     vol.Required(CONF_SHOW_RESERVATIONS, default=True): bool,
                     vol.Required(CONF_SHOW_RESERVATIONS_READY, default=True): bool,

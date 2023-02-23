@@ -1,7 +1,10 @@
+CONF_AGENCY = "agency"
+CONF_BRANCH_ID = "branchId"
 CONF_HOST = "host"
 CONF_MUNICIPALITY = "municipality"
 CONF_NAME = "name"
 CONF_PINCODE = "pincode"
+CONF_SHOW_E_LIBRARY = "show_e_library"
 CONF_SHOW_LOANS = "show_loans"
 CONF_SHOW_RESERVATIONS = "show_reservations"
 CONF_SHOW_RESERVATIONS_READY = "show_reservations_ready"
@@ -24,7 +27,9 @@ MUNICIPALITY_LOOKUP_URL = "https://api.dataforsyningen.dk/kommuner/reverse?x=LON
 
 UPDATE_INTERVAL = 60
 URL_FALLBACK = "https://fmbib.dk"
-URL_LOGIN_PAGE = "/adgangsplatformen/login?destination=ding_frontpage"
+URL_LOGIN = "/adgangsplatformen/login"
+URL_LOGIN_PAGE = URL_LOGIN + "?destination=ding_frontpage"
+URL_LOGIN_PAGE_ELIB = URL_LOGIN + "?destination=/user"
 USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/20100101 Firefox/77.0",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/20100101 Firefox/77.0",
