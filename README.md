@@ -10,7 +10,7 @@
 ## Configuration
 All the configuration is done in GUI.
 
-![image](https://user-images.githubusercontent.com/54498188/220758300-7c87b080-938d-467b-b19a-11c6e6d66f99.png)
+![image](https://user-images.githubusercontent.com/54498188/221042602-7aa01c03-5299-492a-bd38-0fc914b11c97.png)
 
 1. Just add the integration on your integrationspage.
 2. Fill the form with the needed and optional information (**required is bold**, optional is not):
@@ -18,6 +18,7 @@ All the configuration is done in GUI.
 - **Municipality**, Home Assistant will try to determine this from the coordinates of your home zone
 - **CPR - number / loannumber**
 - **Pincode**
+- Show eReolen (e-books and audiobooks), boolean (default true)
 - Show loans, boolean (default true)
 - Show reservations, boolean (default true)
 - Show reservations ready, boolean (default true)
@@ -40,6 +41,10 @@ In its current state (yes it is still in development), you will get 4 diffent se
   - Reservations ready for pickup
   - Debts
   - Your profile information and settings from the library
+  - *eBooks*
+  - *eBooks quota*
+  - *Audiobooks*
+  - *Audiobooks quota*
 ### Loans sensor
 - A "Loans" sensor with number of loans as state and all available details on the materials (if supplied by the library):
   - Title
