@@ -16,7 +16,6 @@
       }
     },
     "error": {
-      "pincode_length": "[%key:common::config_flow::error::pincode_length%]",
       "user_exist": "[%key:common::config_flow::error::user_exist%]",
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",

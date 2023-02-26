@@ -65,10 +65,6 @@ async def validate_input(
     data[CONF_USER_ID] = re.sub("\D", "", data[CONF_USER_ID])
     data[CONF_PINCODE] = re.sub("\D", "", data[CONF_PINCODE])
 
-    # Check length of Pincode
-    if len(data[CONF_PINCODE]) != 4:
-        raise PincodeLength
-
     # If there is any other instances of the integration
     if DOMAIN in hass.data:
         # Test if the new user exist
@@ -163,8 +159,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await validate_input(self.hass, user_input, libraries)
-            except PincodeLength:
-                errors["base"] = "pincode_length"
             except UserExist:
                 errors["base"] = "user_exist"
             except CannotConnect:
@@ -201,10 +195,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
-
-
-class PincodeLength(HomeAssistantError):
-    """Error in the length of the Pincode."""
 
 
 class UserExist(HomeAssistantError):
