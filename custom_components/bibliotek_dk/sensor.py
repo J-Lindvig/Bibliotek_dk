@@ -22,7 +22,11 @@ from .const import (
     CONF_SHOW_RESERVATIONS,
     CONF_SHOW_RESERVATIONS_READY,
 )
-from homeassistant.const import ATTR_ATTRIBUTION, ATTR_UNIT_OF_MEASUREMENT
+from homeassistant.const import (
+    ATTR_ATTRIBUTION,
+    ATTR_UNIT_OF_MEASUREMENT,
+    ATTR_ENTITY_PICTURE,
+)
 
 from .library_api import Library, libraryUser
 
@@ -150,6 +154,10 @@ class LibrarySensor(SensorEntity):
                     "audiobooks_quota": self.myLibrary.user.audioBooksQuota,
                 }
             )
+
+        # PNG as icon/entity-picture
+        if self.myLibrary.icon:
+            attr.update({ATTR_ENTITY_PICTURE: self.myLibrary.icon})
 
         return attr
 

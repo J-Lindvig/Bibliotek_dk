@@ -60,7 +60,7 @@ Library holds the engine of the scraping.
 
 
 class Library:
-    host, libraryName, user = None, None, None
+    host, libraryName, icon, user = None, None, None, None
     loggedIn, eLoggedIn, running = False, False, False
 
     """
@@ -259,6 +259,10 @@ class Library:
             # Retrieve the name of the Library from the title tag
             # <title>Faaborg-Midtfyn Bibliotekerne | | Logget ind</title>
             self.libraryName = soup.title.string.split("|")[0].strip()
+
+            # Fetch the icon of the library
+            self.icon = soup.select_one("link[rel*='icon']")
+            self.icon = self.icon["href"] if self.icon else None
 
         if not self.loggedIn:
             # Fetch the loginpage and prepare a soup
