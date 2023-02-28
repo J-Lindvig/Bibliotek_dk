@@ -124,10 +124,6 @@ class Library:
             # Sort the lists
             self.sortLists()
 
-            # If any loans, set the nextExpireDate to the first loan in the list
-            if self.user.loans:
-                self.user.nextExpireDate = self.user.loans[0].expireDate
-
         self.running = False
 
         return True
@@ -516,7 +512,6 @@ class libraryUser:
     phone, phoneNotify, mail, mailNotify = None, None, None, None
     loans, reservations, reservationsReady, debts = [], [], [], None
     eBooks, eBooksQuota, audioBooks, audioBooksQuota = 0, 0, 0, 0
-    nextExpireDate = None
     pickupLibrary = None
 
     def __init__(self, userId: str, pincode: str):
