@@ -8,9 +8,9 @@
           "user_id": "[%key:common::config_flow::data::user_id%]",
           "pincode": "[%key:common::config_flow::data::pincode%]",
           "show_e_library": "[%key:common::config_flow::data::show_e_library%]",
+          "show_debts": "[%key:common::config_flow::data::show_debts%]",
           "show_loans": "[%key:common::config_flow::data::show_loans%]",
           "show_reservations": "[%key:common::config_flow::data::show_reservations%]",
-          "show_reservations_ready": "[%key:common::config_flow::data::show_reservations_ready%]",
           "update_interval": "[%key:common::config_flow::data::update_interval%]"
         }
       }

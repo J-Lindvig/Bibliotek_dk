@@ -27,10 +27,10 @@ from .const import (
     CONF_MUNICIPALITY,
     CONF_NAME,
     CONF_PINCODE,
+    CONF_SHOW_DEBTS,
     CONF_SHOW_E_LIBRARY,
     CONF_SHOW_LOANS,
     CONF_SHOW_RESERVATIONS,
-    CONF_SHOW_RESERVATIONS_READY,
     CONF_UPDATE_INTERVAL,
     CONF_USER_ID,
     DOMAIN,
@@ -93,7 +93,6 @@ async def validate_input(
         if data[CONF_NAME]
         else data[CONF_MUNICIPALITY]
     )
-    print(data)
     return {"title": title, "data": data}
 
 
@@ -188,8 +187,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_PINCODE, default=""): str,
                     vol.Required(CONF_SHOW_E_LIBRARY, default=True): bool,
                     vol.Required(CONF_SHOW_LOANS, default=True): bool,
+                    #                    vol.Required(CONF_SHOW_LOANS_OVERDUE, default=True): bool,
+                    vol.Required(CONF_SHOW_DEBTS, default=True): bool,
                     vol.Required(CONF_SHOW_RESERVATIONS, default=True): bool,
-                    vol.Required(CONF_SHOW_RESERVATIONS_READY, default=True): bool,
+                    #                    vol.Required(CONF_SHOW_RESERVATIONS_READY, default=True): bool,
                     vol.Optional(CONF_UPDATE_INTERVAL, default=UPDATE_INTERVAL): int,
                 }
             ),

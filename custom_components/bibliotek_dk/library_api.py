@@ -96,7 +96,7 @@ class Library:
         self.running = True
 
         if self.login():
-            self.fetchUserLinks()  # Soon obsolete....
+            #            self.fetchUserLinks()  # Soon obsolete....
 
             # Only fetch user info once
             if not self.user.name:
@@ -104,8 +104,10 @@ class Library:
 
             # Fetch the states of the user
             self.user.loans = self.fetchLoans()
+            self.user.loansOverdue = self.fetchLoansOverdue()
             self.user.reservations = self.fetchReservations()
             self.user.reservationsReady = self.fetchReservationsReady()
+            self.user.debts, self.user.debtsAmount = self.fetchDebts()
 
             # Logout
             self.logout()
@@ -241,6 +243,12 @@ class Library:
 
         return details.items()
 
+    def _removeCurrency(self, amount) -> float:
+        result = re.search("(\d*\,\d*)", amount)
+        if result:
+            amount = float(result.group(1).replace(",", "."))
+        return amount
+
     ####  PRIVATE END  ####
     def login(self):
 
@@ -342,7 +350,7 @@ class Library:
 
     # Fetch the links to the different pages from the "My Pages page
     def fetchUserLinks(self):
-        # # Fetch "My view"
+        ## Fetch "My view"
         soup = self._fetchPage(self.host + URLS[MY_PAGES])
 
         # Fetch usefull user states - OBSOLETE WHEN FETCHING DETAILS
@@ -351,6 +359,7 @@ class Library:
         ):
             if URLS[DEBTS] in a_status["href"]:
                 self.user.debts = a_status.parent.find_all("span")[-1].string
+                print(a_status.parent.find_all("span")[-1])
 
     # Get information on the user
     def fetchUserInfo(self):
@@ -433,6 +442,42 @@ class Library:
 
         return tempList
 
+    def fetchLoansOverdue(self):
+        # Fetch the loans overdue page
+        # soup = self._fetchPage(self.host + URLS[LOANS_OVERDUE])
+
+        return self.fetchLoans(self._fetchPage(self.host + URLS[LOANS_OVERDUE]))
+
+        # # From the <div> containing part of the class
+        # # for material in soup.select("div[class*='material-item']"):
+        # tempList = []
+        # for material in self._getMaterials(soup):
+        #     # Create an instance of libraryLoan
+        #     obj = libraryLoan()
+
+        #     # Renewable
+        #     obj.renewId, obj.renewAble = self._getIdInfo(material)
+
+        #     # URL and image
+        #     obj.url, obj.coverUrl = self._getMaterialUrls(material)
+
+        #     # Type, title and creator
+        #     obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
+
+        #     # Details
+        #     for keys, value in self._getDetails(material):
+        #         if "loan-date" in keys:
+        #             obj.loanDate = self._getDatetime(value)
+        #         elif "expire-date" in keys:
+        #             obj.expireDate = self._getDatetime(value)
+        #         elif "material-number" in keys:
+        #             obj.id = value
+
+        #     # Add the loan to the stack
+        #     tempList.append(obj)
+
+        # return tempList
+
     # Get the current reservations
     def fetchReservations(self):
         # Fecth the reservations page
@@ -470,7 +515,7 @@ class Library:
         return tempList
 
     # Get the reservations which are ready
-    def fetchReservationsReady(self):
+    def fetchReservationsReady(self) -> list:
         # Fecth the ready reservationsReady page
         soup = self._fetchPage(self.host + URLS[RESERVATIONS_READY])
 
@@ -505,12 +550,48 @@ class Library:
 
         return tempList
 
+    # Get debts, if any, from the Library
+    def fetchDebts(self) -> tuple:
+        # Fetch the debts page
+        soup = self._fetchPage(self.host + URLS[DEBTS])
+
+        tempList = []
+        # From the <div> with containg the class of the materials
+        for material in self._getMaterials(soup):
+            obj = libraryDebt()
+
+            # Get the first element (id)
+            obj.id = self._getIdInfo(material)[0]
+
+            # URL and image
+            obj.url, obj.coverUrl = self._getMaterialUrls(material)
+
+            # Type, title and creator
+            obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
+
+            # Details
+            for keys, value in self._getDetails(material):
+                if "fee-date" in keys:
+                    obj.feeDate = self._getDatetime(value)
+                elif "fee-type" in keys:
+                    obj.feeType = value
+                elif "fee_amount" in keys:
+                    obj.feeAmount = self._removeCurrency(value)
+
+            tempList.append(obj)
+
+        amount = soup.select_one("span[class='amount']")
+        amount = self._removeCurrency(amount.string) if amount else 0.0
+
+        return tempList, amount
+
 
 class libraryUser:
     userInfo = None
     name, address = None, None
     phone, phoneNotify, mail, mailNotify = None, None, None, None
-    loans, reservations, reservationsReady, debts = [], [], [], None
+    loans, loansOverdue, reservations, reservationsReady, debts = [], [], [], [], []
+    debtsAmount = 0.0
     eBooks, eBooksQuota, audioBooks, audioBooksQuota = 0, 0, 0, 0
     pickupLibrary = None
 
@@ -538,3 +619,7 @@ class libraryReservation(libraryMaterial):
 class libraryReservationReady(libraryMaterial):
     createdDate, pickupDate, reservationNumber = None, None, None
     pickupLibrary = None
+
+
+class libraryDebt(libraryMaterial):
+    feeDate, feeType, feeAmount = None, None, None

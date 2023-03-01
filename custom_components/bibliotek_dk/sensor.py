@@ -19,8 +19,8 @@ from .const import (
     CREDITS,
     DOMAIN,
     CONF_SHOW_LOANS,
+    CONF_SHOW_DEBTS,
     CONF_SHOW_RESERVATIONS,
-    CONF_SHOW_RESERVATIONS_READY,
 )
 from homeassistant.const import (
     ATTR_ATTRIBUTION,
@@ -74,23 +74,21 @@ async def async_setup_entry(
 
     # Library
     myLibrary = hass.data[DOMAIN][entry.entry_id]
-    sensors.append(LibrarySensor(hass, myLibrary, coordinator))
+    sensors.append(LibrarySensor(myLibrary, coordinator))
 
     # Loans
     if entry.data[CONF_SHOW_LOANS]:
-        sensors.append(LoanSensor(hass.data[DOMAIN][entry.entry_id].user, coordinator))
+        sensors.append(LoanSensor(myLibrary.user, coordinator))
+        sensors.append(LoanOverdueSensor(myLibrary.user, coordinator))
+
+    # Debts
+    if entry.data[CONF_SHOW_DEBTS]:
+        sensors.append(DebtSensor(myLibrary.user, coordinator))
 
     # Reservations
     if entry.data[CONF_SHOW_RESERVATIONS]:
-        sensors.append(
-            ReservationSensor(hass.data[DOMAIN][entry.entry_id].user, coordinator)
-        )
-
-    # Reservations Ready
-    if entry.data[CONF_SHOW_RESERVATIONS_READY]:
-        sensors.append(
-            ReservationReadySensor(hass.data[DOMAIN][entry.entry_id].user, coordinator)
-        )
+        sensors.append(ReservationSensor(myLibrary.user, coordinator))
+        sensors.append(ReservationReadySensor(myLibrary.user, coordinator))
 
     async_add_entities(sensors)
 
@@ -102,7 +100,6 @@ def md5_unique_id(string):
 class LibrarySensor(SensorEntity):
     def __init__(
         self,
-        hass: HomeAssistant,
         myLibrary: Library,
         coordinator: DataUpdateCoordinator,
     ) -> None:
@@ -133,9 +130,10 @@ class LibrarySensor(SensorEntity):
     def extra_state_attributes(self):
         attr = {
             "loans": len(self.myLibrary.user.loans),
+            "loans_overdue": len(self.myLibrary.user.loansOverdue),
             "reservations": len(self.myLibrary.user.reservations),
             "reservations_ready": len(self.myLibrary.user.reservationsReady),
-            "debts": self.myLibrary.user.debts,
+            "debts": len(self.myLibrary.user.debts),
             "user": self.myLibrary.user.name,
             "address": self.myLibrary.user.address,
             "phone": self.myLibrary.user.phone,
@@ -205,10 +203,10 @@ class LoanSensor(SensorEntity):
 
     @property
     def icon(self):
-        loanAmount = len(self.libraryUser.loans)
-        if loanAmount == 0:
+        amount = len(self.libraryUser.loans)
+        if amount == 0:
             return "mdi:book-cancel"
-        elif loanAmount == 1:
+        elif amount == 1:
             return "mdi:book"
         else:
             return "mdi:book-multiple"
@@ -262,6 +260,79 @@ class LoanSensor(SensorEntity):
         )
 
 
+class LoanOverdueSensor(SensorEntity):
+    def __init__(
+        self,
+        libraryUser: libraryUser,
+        coordinator: DataUpdateCoordinator,
+    ) -> None:
+        self.libraryUser = libraryUser
+        self.coordinator = coordinator
+        self._name = f"Bibliotekslån overskredet ({self.libraryUser.name})"
+        self._unique_id = md5_unique_id("LoansOverdue_" + self.libraryUser.userId)
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def icon(self):
+        amount = len(self.libraryUser.loansOverdue)
+        if amount == 0:
+            return "mdi:alarm-off"
+        elif amount == 1:
+            return "mdi:alarm"
+        else:
+            return "mdi:alarm-multiple"
+
+    @property
+    def state(self):
+        return len(self.libraryUser.loansOverdue)
+
+    @property
+    def extra_state_attributes(self):
+        attr = {}
+        loans = []
+        for loan in self.libraryUser.loansOverdue:
+            details = {
+                "title": loan.title,
+                "creators": loan.creators,
+                "type": loan.type,
+                "loan_date": loan.loanDate,
+                "expire_date": loan.expireDate,
+                "url": loan.url,
+                "cover": loan.coverUrl,
+            }
+            loans.append(details)
+        attr["loans"] = loans
+        attr[ATTR_ATTRIBUTION] = CREDITS
+        return attr
+
+    @property
+    def unique_id(self):
+        return self._unique_id
+
+    @property
+    def should_poll(self):
+        """No need to poll. Coordinator notifies entity of updates."""
+        return False
+
+    @property
+    def available(self):
+        """Return if entity is available."""
+        return self.coordinator.last_update_success
+
+    async def async_update(self):
+        """Update the entity. Only used by the generic entity update service."""
+        await self.coordinator.async_request_refresh()
+
+    async def async_added_to_hass(self):
+        """When entity is added to hass."""
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+
 class ReservationSensor(SensorEntity):
     def __init__(
         self,
@@ -279,10 +350,10 @@ class ReservationSensor(SensorEntity):
 
     @property
     def icon(self):
-        loanAmount = len(self.libraryUser.reservations)
-        if loanAmount == 0:
+        amount = len(self.libraryUser.reservations)
+        if amount == 0:
             return "mdi:book-cancel"
-        elif loanAmount == 1:
+        elif amount == 1:
             return "mdi:book-plus"
         else:
             return "mdi:book-plus-multiple"
@@ -354,10 +425,10 @@ class ReservationReadySensor(SensorEntity):
 
     @property
     def icon(self):
-        loanAmount = len(self.libraryUser.reservationsReady)
-        if loanAmount == 0:
+        amount = len(self.libraryUser.reservationsReady)
+        if amount == 0:
             return "mdi:book-cancel"
-        elif loanAmount == 1:
+        elif amount == 1:
             return "mdi:book-plus"
         else:
             return "mdi:book-plus-multiple"
@@ -384,6 +455,79 @@ class ReservationReadySensor(SensorEntity):
             }
             reservationsReady.append(details)
         attr["reservations_ready"] = reservationsReady
+        attr[ATTR_ATTRIBUTION] = CREDITS
+        return attr
+
+    @property
+    def unique_id(self):
+        return self._unique_id
+
+    @property
+    def should_poll(self):
+        """No need to poll. Coordinator notifies entity of updates."""
+        return False
+
+    @property
+    def available(self):
+        """Return if entity is available."""
+        return self.coordinator.last_update_success
+
+    async def async_update(self):
+        """Update the entity. Only used by the generic entity update service."""
+        await self.coordinator.async_request_refresh()
+
+    async def async_added_to_hass(self):
+        """When entity is added to hass."""
+        self.async_on_remove(
+            self.coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+
+class DebtSensor(SensorEntity):
+    def __init__(
+        self,
+        libraryUser: libraryUser,
+        coordinator: DataUpdateCoordinator,
+    ) -> None:
+        self.libraryUser = libraryUser
+        self.coordinator = coordinator
+        self._name = f"Gebyrer ({self.libraryUser.name})"
+        self._unique_id = md5_unique_id("Debts_" + self.libraryUser.userId)
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def icon(self):
+        amount = len(self.libraryUser.debts)
+        if amount == 0:
+            return "mdi:numeric-0"
+        elif amount == 1:
+            return "mdi:cash"
+        else:
+            return "mdi:cash-multiple"
+
+    @property
+    def state(self):
+        return self.libraryUser.debtsAmount
+
+    @property
+    def extra_state_attributes(self):
+        attr = {}
+        debts = []
+        for debt in self.libraryUser.debts:
+            details = {
+                "title": debt.title,
+                "type": debt.type,
+                "fee_date": debt.feeDate,
+                "fee_type": debt.feeType,
+                "fee_amount": debt.feeAmount,
+                "url": debt.url,
+                "cover": debt.coverUrl,
+            }
+            debts.append(details)
+        attr["debts"] = debts
         attr[ATTR_ATTRIBUTION] = CREDITS
         return attr
 
