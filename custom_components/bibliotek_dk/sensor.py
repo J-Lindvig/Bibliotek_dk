@@ -217,7 +217,7 @@ class LoanSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        attr = {}
+        attr = {"user": self.libraryUser.name}
         loans = []
         for loan in self.libraryUser.loans:
             details = {
@@ -291,7 +291,7 @@ class LoanOverdueSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        attr = {}
+        attr = {"user": self.libraryUser.name}
         loans = []
         for loan in self.libraryUser.loansOverdue:
             details = {
@@ -364,7 +364,7 @@ class ReservationSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        attr = {}
+        attr = {"user": self.libraryUser.name}
         reservations = []
         for reservation in self.libraryUser.reservations:
             details = {
@@ -439,7 +439,7 @@ class ReservationReadySensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        attr = {}
+        attr = {"user": self.libraryUser.name}
         reservationsReady = []
         for reservationReady in self.libraryUser.reservationsReady:
             details = {
@@ -514,7 +514,7 @@ class DebtSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        attr = {}
+        attr = {"user": self.libraryUser.name}
         debts = []
         for debt in self.libraryUser.debts:
             details = {
