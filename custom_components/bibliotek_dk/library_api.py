@@ -18,7 +18,6 @@ from .const import (
 DEBUG = True
 
 #### KEYS
-# CHECKLIST = "CHECKLIST"	# JS
 DEBTS = "DEBTS"
 LOANS = "LOANS"
 LOANS_OVERDUE = "LOANS_OVERDUE"
@@ -27,18 +26,10 @@ LOGOUT_ELIB = "LOGOUT_ELIB"
 MY_PAGES = "MY_PAGES"
 RESERVATIONS = "RESERVATIONS"
 RESERVATIONS_READY = "RESERVATIONS_READY"
-# SEARCHES = "SEARCHES"		# JS
 USER_PROFILE = "USER_PROFILE"
-
-#### SEARCH STRINGS
-LOGGED_IN = "logget ind"
-LOGGED_IN_ELIB = "Logged-in"
-EBOOKS = "ebøger"
-AUDIO_BOOKS = "lydbøger"
 
 #### LINKS TO USER PAGES
 URLS = {
-    # 	CHECKLIST: "/user/me/checklist", # JS
     DEBTS: "/user/me/status-debts",
     LOANS: "/user/me/status-loans",
     LOANS_OVERDUE: "/user/me/status-loans-overdue",
@@ -47,31 +38,22 @@ URLS = {
     MY_PAGES: "/user/me/view",
     RESERVATIONS: "/user/me/status-reservations",
     RESERVATIONS_READY: "/user/me/status-reservations-ready",
-    # 	SEARCHES: "/user/me/followed-searches", # JS
     USER_PROFILE: "/user/me/edit",
 }
 
+#### SEARCH STRINGS
+LOGGED_IN = "logget ind"
+LOGGED_IN_ELIB = "Logged-in"
+EBOOKS = "ebøger"
+AUDIO_BOOKS = "lydbøger"
+
 _LOGGER: logging.Logger = logging.getLogger(__package__)
 _LOGGER = logging.getLogger(__name__)
-
-"""
-Library holds the engine of the scraping.
-"""
 
 
 class Library:
     host, libraryName, icon, user = None, None, None, None
     loggedIn, eLoggedIn, running = False, False, False
-
-    """
-	Initialize of Library takes these arguments:
-
-	userId: (CPR-number) or Loaner-ID
-	pincode: Pincode
-	host, URL to your local library
-
-	A libraryUser object is created from the credentials.
-	"""
 
     def __init__(
         self, userId: str, pincode: str, host=str, libraryName=None, agency=None
@@ -96,8 +78,6 @@ class Library:
         self.running = True
 
         if self.login():
-            #            self.fetchUserLinks()  # Soon obsolete....
-
             # Only fetch user info once
             if not self.user.name:
                 self.fetchUserInfo()
@@ -131,7 +111,6 @@ class Library:
         return True
 
     #### PRIVATE BEGIN ####
-
     # Retrieve a webpage with either GET/POST
     def _fetchPage(self, url=str, payload=None) -> BS:
         # If payload, use POST
@@ -296,6 +275,9 @@ class Library:
             self.loggedIn = self._titleInSoup(soup, LOGGED_IN)
             self.libraryName = soup.title.string.split("|")[0].strip()  # REDUNDANT
 
+        if DEBUG:
+            _LOGGER.debug(f"({self.user.userId[:-4]}) is logged in: {self.loggedIn}")
+
         return self.loggedIn
 
     def login_eLib(self) -> tuple:
@@ -327,6 +309,11 @@ class Library:
             )
             self.loggedIn = soup if self._titleInSoup(soup, LOGGED_IN_ELIB) else False
 
+        if DEBUG:
+            _LOGGER.debug(
+                f"({self.user.userId[:-4]}) is logged in @{self.host_elib}: {bool(self.loggedIn)}"
+            )
+
         return self.loggedIn, soup
 
     def logout(self, url=None):
@@ -336,6 +323,10 @@ class Library:
             self.loggedIn = not self.session.get(url).status_code == 200
             if not self.loggedIn:
                 self.session.close()
+        if DEBUG:
+            _LOGGER.debug(
+                f"({self.user.userId[:-4]}) is logged OUT @{url}: {not bool(self.loggedIn)}"
+            )
 
     def fecthELibUsedQuota(self, soup):
         for li in soup.h1.parent.div.ul.find_all("li"):
@@ -347,19 +338,10 @@ class Library:
                 elif result.group(3) == AUDIO_BOOKS:
                     self.user.audioBooks = result.group(1)
                     self.user.audioBooksQuota = result.group(2)
-
-    # Fetch the links to the different pages from the "My Pages page
-    def fetchUserLinks(self):
-        ## Fetch "My view"
-        soup = self._fetchPage(self.host + URLS[MY_PAGES])
-
-        # Fetch usefull user states - OBSOLETE WHEN FETCHING DETAILS
-        for a_status in soup.select_one("ul[class='list-links specials']").find_all(
-            "a"
-        ):
-            if URLS[DEBTS] in a_status["href"]:
-                self.user.debts = a_status.parent.find_all("span")[-1].string
-                print(a_status.parent.find_all("span")[-1])
+        if DEBUG:
+            _LOGGER.debug(
+                f"({self.user.userId[:-4]}), done fetching eLibQuotas: ({self.user.eBooks}/{self.user.eBooksQuota}) ({self.user.audioBooks}/{self.user.audioBooksQuota})"
+            )
 
     # Get information on the user
     def fetchUserInfo(self):
@@ -406,6 +388,11 @@ class Library:
                 self.user.pickupLibrary = library.string
                 break
 
+        if DEBUG:
+            _LOGGER.debug(
+                f"({self.user.userId[:-4]}) is actually '{self.user.name}'. Pickup library is {self.user.pickupLibrary}"
+            )
+
     # Get the loans with all possible details
     def fetchLoans(self, soup=None):
         # Fetch the loans page
@@ -440,43 +427,16 @@ class Library:
             # Add the loan to the stack
             tempList.append(obj)
 
+        if DEBUG:
+            _LOGGER.debug(f"{self.user.name} has {len(tempList)} loans")
+
         return tempList
 
     def fetchLoansOverdue(self):
+        if DEBUG:
+            _LOGGER.debug(f"{self.user.name}, Reusing the fetchLoans function...")
         # Fetch the loans overdue page
-        # soup = self._fetchPage(self.host + URLS[LOANS_OVERDUE])
-
         return self.fetchLoans(self._fetchPage(self.host + URLS[LOANS_OVERDUE]))
-
-        # # From the <div> containing part of the class
-        # # for material in soup.select("div[class*='material-item']"):
-        # tempList = []
-        # for material in self._getMaterials(soup):
-        #     # Create an instance of libraryLoan
-        #     obj = libraryLoan()
-
-        #     # Renewable
-        #     obj.renewId, obj.renewAble = self._getIdInfo(material)
-
-        #     # URL and image
-        #     obj.url, obj.coverUrl = self._getMaterialUrls(material)
-
-        #     # Type, title and creator
-        #     obj.title, obj.creators, obj.type = self._getMaterialInfo(material)
-
-        #     # Details
-        #     for keys, value in self._getDetails(material):
-        #         if "loan-date" in keys:
-        #             obj.loanDate = self._getDatetime(value)
-        #         elif "expire-date" in keys:
-        #             obj.expireDate = self._getDatetime(value)
-        #         elif "material-number" in keys:
-        #             obj.id = value
-
-        #     # Add the loan to the stack
-        #     tempList.append(obj)
-
-        # return tempList
 
     # Get the current reservations
     def fetchReservations(self):
@@ -511,6 +471,9 @@ class Library:
 
             # Add the reservation to the stack
             tempList.append(obj)
+
+        if DEBUG:
+            _LOGGER.debug(f"{self.user.name} has {len(tempList)} reservations")
 
         return tempList
 
@@ -548,6 +511,11 @@ class Library:
             # Add the reservation to the stack
             tempList.append(obj)
 
+        if DEBUG:
+            _LOGGER.debug(
+                f"{self.user.name} has {len(tempList)} reservations ready for pickup"
+            )
+
         return tempList
 
     # Get debts, if any, from the Library
@@ -582,6 +550,11 @@ class Library:
 
         amount = soup.select_one("span[class='amount']")
         amount = self._removeCurrency(amount.string) if amount else 0.0
+
+        if DEBUG:
+            _LOGGER.debug(
+                f"{self.user.name} has {len(tempList)} debts with a total of {amount}"
+            )
 
         return tempList, amount
 
