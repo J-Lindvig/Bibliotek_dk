@@ -141,6 +141,7 @@ class LibrarySensor(SensorEntity):
             "mail": self.myLibrary.user.mail,
             "mail_notifications": self.myLibrary.user.mailNotify,
             "pickup_library": self.myLibrary.user.pickupLibrary,
+            "sensor_type": "main",
             ATTR_UNIT_OF_MEASUREMENT: "days",
             ATTR_ATTRIBUTION: CREDITS,
         }
@@ -220,17 +221,18 @@ class LoanSensor(SensorEntity):
         attr = {"user": self.libraryUser.name}
         loans = []
         for loan in self.libraryUser.loans:
-            details = {
-                "title": loan.title,
-                "creators": loan.creators,
-                "type": loan.type,
-                "loan_date": loan.loanDate,
-                "expire_date": loan.expireDate,
-                "renewable": loan.renewAble,
-                "url": loan.url,
-                "cover": loan.coverUrl,
-            }
-            loans.append(details)
+            loans.append(
+                {
+                    "title": loan.title,
+                    "creators": loan.creators,
+                    "type": loan.type,
+                    "loan_date": loan.loanDate,
+                    "expire_date": loan.expireDate,
+                    "renewable": loan.renewAble,
+                    "url": loan.url,
+                    "cover": loan.coverUrl,
+                }
+            )
         attr["loans"] = loans
         attr[ATTR_ATTRIBUTION] = CREDITS
         return attr
@@ -292,19 +294,20 @@ class LoanOverdueSensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         attr = {"user": self.libraryUser.name}
-        loans = []
-        for loan in self.libraryUser.loansOverdue:
-            details = {
-                "title": loan.title,
-                "creators": loan.creators,
-                "type": loan.type,
-                "loan_date": loan.loanDate,
-                "expire_date": loan.expireDate,
-                "url": loan.url,
-                "cover": loan.coverUrl,
-            }
-            loans.append(details)
-        attr["loans"] = loans
+        loans_overdue = []
+        for loan_overdue in self.libraryUser.loansOverdue:
+            loans_overdue.append(
+                {
+                    "title": loan_overdue.title,
+                    "creators": loan_overdue.creators,
+                    "type": loan_overdue.type,
+                    "loan_date": loan_overdue.loanDate,
+                    "expire_date": loan_overdue.expireDate,
+                    "url": loan_overdue.url,
+                    "cover": loan_overdue.coverUrl,
+                }
+            )
+        attr["loans_overdue"] = loans_overdue
         attr[ATTR_ATTRIBUTION] = CREDITS
         return attr
 
@@ -367,18 +370,19 @@ class ReservationSensor(SensorEntity):
         attr = {"user": self.libraryUser.name}
         reservations = []
         for reservation in self.libraryUser.reservations:
-            details = {
-                "title": reservation.title,
-                "creators": reservation.creators,
-                "type": reservation.type,
-                "queue_number": reservation.queueNumber,
-                "created_date": reservation.createdDate,
-                "expire_date": reservation.expireDate,
-                "pickup_library": reservation.pickupLibrary,
-                "url": reservation.url,
-                "cover": reservation.coverUrl,
-            }
-            reservations.append(details)
+            reservations.append(
+                {
+                    "title": reservation.title,
+                    "creators": reservation.creators,
+                    "type": reservation.type,
+                    "queue_number": reservation.queueNumber,
+                    "created_date": reservation.createdDate,
+                    "expire_date": reservation.expireDate,
+                    "pickup_library": reservation.pickupLibrary,
+                    "url": reservation.url,
+                    "cover": reservation.coverUrl,
+                }
+            )
         attr["reservations"] = reservations
         attr[ATTR_ATTRIBUTION] = CREDITS
         return attr
@@ -442,18 +446,19 @@ class ReservationReadySensor(SensorEntity):
         attr = {"user": self.libraryUser.name}
         reservationsReady = []
         for reservationReady in self.libraryUser.reservationsReady:
-            details = {
-                "title": reservationReady.title,
-                "creators": reservationReady.creators,
-                "type": reservationReady.type,
-                "reservation_number": reservationReady.reservationNumber,
-                "created_date": reservationReady.createdDate,
-                "pickup_date": reservationReady.pickupDate,
-                "pickup_library": reservationReady.pickupLibrary,
-                "url": reservationReady.url,
-                "cover": reservationReady.coverUrl,
-            }
-            reservationsReady.append(details)
+            reservationsReady.append(
+                {
+                    "title": reservationReady.title,
+                    "creators": reservationReady.creators,
+                    "type": reservationReady.type,
+                    "reservation_number": reservationReady.reservationNumber,
+                    "created_date": reservationReady.createdDate,
+                    "pickup_date": reservationReady.pickupDate,
+                    "pickup_library": reservationReady.pickupLibrary,
+                    "url": reservationReady.url,
+                    "cover": reservationReady.coverUrl,
+                }
+            )
         attr["reservations_ready"] = reservationsReady
         attr[ATTR_ATTRIBUTION] = CREDITS
         return attr
@@ -517,16 +522,17 @@ class DebtSensor(SensorEntity):
         attr = {"user": self.libraryUser.name}
         debts = []
         for debt in self.libraryUser.debts:
-            details = {
-                "title": debt.title,
-                "type": debt.type,
-                "fee_date": debt.feeDate,
-                "fee_type": debt.feeType,
-                "fee_amount": debt.feeAmount,
-                "url": debt.url,
-                "cover": debt.coverUrl,
-            }
-            debts.append(details)
+            debts.append(
+                {
+                    "title": debt.title,
+                    "type": debt.type,
+                    "fee_date": debt.feeDate,
+                    "fee_type": debt.feeType,
+                    "fee_amount": debt.feeAmount,
+                    "url": debt.url,
+                    "cover": debt.coverUrl,
+                }
+            )
         attr["debts"] = debts
         attr[ATTR_ATTRIBUTION] = CREDITS
         return attr
