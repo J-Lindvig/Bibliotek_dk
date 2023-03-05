@@ -24,7 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Bibliotek from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    component = hass.data[DOMAIN][entry.entry_id] = Library(
+    hass.data[DOMAIN][entry.entry_id] = Library(
         entry.data[CONF_USER_ID],
         entry.data[CONF_PINCODE],
         entry.data[CONF_HOST],

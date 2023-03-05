@@ -72,7 +72,7 @@ class Library:
 
     # The update function is called from the coordinator from Home Assistant
     def update(self):
-        _LOGGER.debug(f"Updating ({self.user.userId[:-4]})...")
+        _LOGGER.debug("Updating (%s)", self.user.userId[:-4])
 
         # Only one user can login at the time.
         self.running = True
@@ -112,24 +112,47 @@ class Library:
 
     #### PRIVATE BEGIN ####
     # Retrieve a webpage with either GET/POST
-    def _fetchPage(self, url=str, payload=None) -> BS:
-        # If payload, use POST
-        if payload:
-            r = self.session.post(url, data=payload)
+    def _fetchPage(self, url=str, payload=None, return_r=False) -> BS | tuple:
+        try:
+            # If payload, use POST
+            if payload:
+                r = self.session.post(url, data=payload)
 
-        # else use GET
-        else:
-            r = self.session.get(url)
+            # else use GET
+            else:
+                r = self.session.get(url)
+
+            r.raise_for_status()
+
+        except requests.exceptions.HTTPError as err:
+            raise SystemExit(err) from err
+        except requests.exceptions.Timeout:
+            _LOGGER.error("Timeout fecthing (%s)", url)
+        except requests.exceptions.TooManyRedirects:
+            _LOGGER.error("Too many redirects fecthing (%s)", url)
+        except requests.exceptions.RequestException as err:
+            raise SystemExit(err) from err
+
+        if return_r:
+            return BS(r.text, "html.parser"), r
 
         # Return HTML soup
         return BS(r.text, "html.parser")
 
     # Search for given string in the HTML soup
     def _titleInSoup(self, soup, string) -> bool:
-        return string.lower() in soup.title.string.lower()
+        try:
+            result = string.lower() in soup.title.string.lower()
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error(
+                "Error in finding (%s) in the title of the page. Error: (%s)",
+                string.lower(),
+                err,
+            )
+        return result
 
     # Convert ex. "22. maj 2023 [23:12:45]" to a datetime object
-    def _getDatetime(self, date, format="%d. %b %Y") -> datetime:
+    def _getDatetime(self, date, a_format="%d. %b %Y") -> datetime:
         # Split the string by the " "
         date = date.split(" ")
 
@@ -148,7 +171,7 @@ class Library:
             m = "oct"
 
         # Create a datetime with the date
-        date = datetime.strptime(f"{d} {m} {y}", format)
+        date = datetime.strptime(f"{d} {m} {y}", a_format)
         # If Time is present, add it to the date
         if t:
             h, m, s = t.split(":")
@@ -171,10 +194,26 @@ class Library:
         self.user.reservationsReady.sort(key=lambda obj: (obj.pickupDate, obj.title))
 
     def _getMaterials(self, soup, noodle="div[class*='material-item']") -> BS:
-        return soup.select(noodle)
+        try:
+            result = soup.select(noodle)
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error(
+                "Error in getting the <div> with this noodle (%s). Error: (%s)",
+                noodle,
+                err,
+            )
+        return result
 
     def _getIdInfo(self, material) -> tuple:
-        return material.input["value"], not "disabled" in material.input.attrs
+        try:
+            value = material.input["value"]
+            renewAble = not "disabled" in material.input.attrs
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error(
+                "Error in getting the Id and renewable on the material. Error: (%s)",
+                err,
+            )
+        return value, renewAble
 
     def _getMaterialUrls(self, material) -> tuple:
         return (
@@ -186,28 +225,38 @@ class Library:
         # Some title have the type in "()", remove it
         # by splitting the string by the first "(" and use
         # only the first element, stripping whitespaces
-        materialTitle = material.h3.string.split("(")[0].strip()
+        try:
+            materialTitle = material.h3.string.split("(")[0].strip()
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error("Error searching for the <h3> tag. Error: %s", err)
 
         # Assume it is a physical loan
         materialType = material.select_one("div[class=item-material-type]")
-        if materialType:
-            materialType = materialType.string
-        # Ok, maybe it is a digital
-        else:
-            materialType = material.select_one("span[class*='icon']")
+
+        try:
             if materialType:
-                result = re.search(
-                    "This material is a (.+?) and", materialType["aria-label"]
-                )
-                # Yes, it is a digital
-                if result:
-                    materialType = result.group(1)
-            # I have no idea...
+                materialType = materialType.string
+            # Ok, maybe it is a digital
             else:
-                materialType = ""
+                materialType = material.select_one("span[class*='icon']")
+                if materialType:
+                    result = re.search(
+                        "This material is a (.+?) and", materialType["aria-label"]
+                    )
+                    # Yes, it is a digital
+                    if result:
+                        materialType = result.group(1)
+                # I have no idea...
+                else:
+                    materialType = ""
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error("Error in getting the materialType. Error: (%s)", err)
 
         materialCreators = material.select_one("div[class=item-creators]")
-        materialCreators = materialCreators.string if materialCreators else ""
+        try:
+            materialCreators = materialCreators.string if materialCreators else ""
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error("Error in getting the materialCreators. Error: (%s)", err)
 
         return materialTitle, materialCreators, materialType
 
@@ -215,15 +264,20 @@ class Library:
     # (re)Join the class(es) with a " ", use as key
     def _getDetails(self, material):
         details = {}
-        for li in material.find_all("li"):
-            details[" ".join(li["class"])] = li.select_one(
-                "div[class=item-information-data]"
-            ).string
+        try:
+            for li in material.find_all("li"):
+                details[" ".join(li["class"])] = li.select_one(
+                    "div[class=item-information-data]"
+                ).string
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error(
+                "Error in getting the Details of af material. Error: (%s)", err
+            )
 
         return details.items()
 
     def _removeCurrency(self, amount) -> float:
-        result = re.search("(\d*\,\d*)", amount)
+        result = re.search(r"(\d*\,\d*)", amount)
         if result:
             amount = float(result.group(1).replace(",", "."))
         return amount
@@ -232,16 +286,20 @@ class Library:
     def login(self):
 
         # Test if we are logged in by fetching the main page
-        # This is done manually, since we are using the response later
-        r = self.session.get(self.host)
+        soup, r = self._fetchPage(url=self.host, return_r=True)
         if r.status_code == 200:
-            # Page OK, prepare HTML soup
-            soup = BS(r.text, "html.parser")
 
             self.loggedIn = self._titleInSoup(soup, LOGGED_IN)
             # Retrieve the name of the Library from the title tag
             # <title>Faaborg-Midtfyn Bibliotekerne | | Logget ind</title>
-            self.libraryName = soup.title.string.split("|")[0].strip()
+            try:
+                self.libraryName = soup.title.string.split("|")[0].strip()
+            except (AttributeError, KeyError) as err:
+                _LOGGER.error(
+                    "Error in getting the title of the page (%s). Error: (%s)",
+                    self.host,
+                    err,
+                )
 
             # Fetch the icon of the library
             self.icon = soup.select_one("link[rel*='icon']")
@@ -249,34 +307,36 @@ class Library:
 
         if not self.loggedIn:
             # Fetch the loginpage and prepare a soup
-            # Must make a manual GET, since we are the response later
-            r = self.session.get(self.host + URL_LOGIN_PAGE)
-            soup = BS(r.text, "html.parser")
+            soup, r = self._fetchPage(url=self.host + URL_LOGIN_PAGE, return_r=True)
 
             # Prepare the payload
             payload = {}
             # Find the <form>
-            form = soup.find("form")
-            if form:
-                for input in form.find_all("input"):
-                    if input:
-                        # Fill the form with the userInfo
-                        if input["name"] in self.user.userInfo:
-                            payload[input["name"]] = self.user.userInfo[input["name"]]
-                        # or pass default values to payload
-                        else:
-                            payload[input["name"]] = input["value"]
+            try:
+                form = soup.find("form")
+                for inputTag in form.find_all("input"):
+                    # Fill the form with the userInfo
+                    if inputTag["name"] in self.user.userInfo:
+                        payload[inputTag["name"]] = self.user.userInfo[inputTag["name"]]
+                    # or pass default values to payload
+                    else:
+                        payload[inputTag["name"]] = inputTag["value"]
 
                 # Send the payload as POST and prepare a new soup
                 # Use the URL from the response since we have been directed
                 soup = self._fetchPage(form["action"].replace("/login", r.url), payload)
+            except (AttributeError, KeyError) as err:
+                _LOGGER.error(
+                    "Error processing the <form> tag and subtags (%s). Error: (%s)",
+                    self.host + URL_LOGIN_PAGE,
+                    err,
+                )
 
             # Set loggedIn
             self.loggedIn = self._titleInSoup(soup, LOGGED_IN)
-            self.libraryName = soup.title.string.split("|")[0].strip()  # REDUNDANT
 
         if DEBUG:
-            _LOGGER.debug(f"({self.user.userId[:-4]}) is logged in: {self.loggedIn}")
+            _LOGGER.debug("(%s) is logged in: %s", self.user.userId[:-4], self.loggedIn)
 
         return self.loggedIn
 
@@ -287,31 +347,42 @@ class Library:
             return self.login_eLib()
 
         # Test if we are logged in at eReolen.dk
-        r = self.session.get(self.host_elib)
-        soup = BS(r.text, "html.parser")
+        soup, r = self._fetchPage(url=self.host_elib, return_r=True)
         if r.status_code == 200:
             self.eLoggedIn = self._titleInSoup(soup, LOGGED_IN_ELIB)
 
         if not self.loggedIn:
-            r = self.session.get(self.host_elib + URL_LOGIN_PAGE_ELIB)
-            soup = BS(r.text, "html.parser")
+            soup, r = self._fetchPage(
+                url=self.host_elib + URL_LOGIN_PAGE_ELIB, return_r=True
+            )
 
             payload = self.user.userInfo
             payload[CONF_AGENCY] = self.agency
 
-            libraryFormToken = soup.select_one("input[name*=libraryName-]")
-            if libraryFormToken:
-                payload[libraryFormToken["name"]] = self.municipality
+            try:
+                libraryFormToken = soup.select_one("input[name*=libraryName-]")
+                if libraryFormToken:
+                    payload[libraryFormToken["name"]] = self.municipality
 
-            # Send the payload aka LOGIN
-            soup = self._fetchPage(
-                soup.form["action"].replace("/login", r.url), payload
-            )
-            self.loggedIn = soup if self._titleInSoup(soup, LOGGED_IN_ELIB) else False
+                # Send the payload aka LOGIN
+                soup = self._fetchPage(
+                    soup.form["action"].replace("/login", r.url), payload
+                )
+                self.loggedIn = (
+                    soup if self._titleInSoup(soup, LOGGED_IN_ELIB) else False
+                )
+            except (AttributeError, KeyError) as err:
+                _LOGGER.error(
+                    "Error processing the <form> tag and subtags (%s). Error: (%s)",
+                    self.host_elib + URL_LOGIN_PAGE_ELIB,
+                    err,
+                )
 
         if DEBUG:
             _LOGGER.debug(
-                f"({self.user.userId[:-4]}) is logged in @{self.host_elib}: {bool(self.loggedIn)}"
+                "(%s) is logged in @%s: {bool(self.loggedIn)}",
+                self.user.userId[:-4],
+                self.host_elib,
             )
 
         return self.loggedIn, soup
@@ -325,22 +396,34 @@ class Library:
                 self.session.close()
         if DEBUG:
             _LOGGER.debug(
-                f"({self.user.userId[:-4]}) is logged OUT @{url}: {not bool(self.loggedIn)}"
+                "(%s) is logged OUT @%s: %s",
+                self.user.userId[:-4],
+                url,
+                not bool(self.loggedIn),
             )
 
     def fecthELibUsedQuota(self, soup):
-        for li in soup.h1.parent.div.ul.find_all("li"):
-            result = re.search("(\d+) ud af (\d+) (ebøger|lydbøger)", li.string)
-            if result:
-                if result.group(3) == EBOOKS:
-                    self.user.eBooks = result.group(1)
-                    self.user.eBooksQuota = result.group(2)
-                elif result.group(3) == AUDIO_BOOKS:
-                    self.user.audioBooks = result.group(1)
-                    self.user.audioBooksQuota = result.group(2)
+        try:
+            for li in soup.h1.parent.div.ul.find_all("li"):
+                result = re.search(r"(\d+) ud af (\d+) (ebøger|lydbøger)", li.string)
+                if result:
+                    if result.group(3) == EBOOKS:
+                        self.user.eBooks = result.group(1)
+                        self.user.eBooksQuota = result.group(2)
+                    elif result.group(3) == AUDIO_BOOKS:
+                        self.user.audioBooks = result.group(1)
+                        self.user.audioBooksQuota = result.group(2)
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error("Error getting the quotas of eReolen. Error: (%s)", err)
+
         if DEBUG:
             _LOGGER.debug(
-                f"({self.user.userId[:-4]}), done fetching eLibQuotas: ({self.user.eBooks}/{self.user.eBooksQuota}) ({self.user.audioBooks}/{self.user.audioBooksQuota})"
+                "(%s), done fetching eLibQuotas: (%s/%s) (%s/%s)",
+                self.user.userId[:-4],
+                self.user.eBooks,
+                self.user.eBooksQuota,
+                self.user.audioBooks,
+                self.user.audioBooksQuota,
             )
 
     # Get information on the user
@@ -348,49 +431,59 @@ class Library:
         # Fetch the user profile page
         soup = self._fetchPage(self.host + URLS[USER_PROFILE])
 
-        # From the <div> with a specific class, loop all the <div>
-        # containging a part of the class
-        for fields in soup.select_one("div[class=content]").select(
-            "div[class*=field-name]"
-        ):
-            fieldName = fields.select_one("div[class=field-label]")
-            # NASTY HTML PAGE....
-            # From the tag of the fieldName, go to the parent
-            # Find the first <div> with given class
-            fieldValue = fieldName.parent.select_one("div[class=field-items]").div
-            # Remove <br>, again NASTY HTML
-            for e in fieldValue.findAll("br"):
-                e.extract()
+        try:
+            # From the <div> with a specific class, loop all the <div>
+            # containging a part of the class
+            for fields in soup.select_one("div[class=content]").select(
+                "div[class*=field-name]"
+            ):
+                fieldName = fields.select_one("div[class=field-label]")
+                # NASTY HTML PAGE....
+                # From the tag of the fieldName, go to the parent
+                # Find the first <div> with given class
+                fieldValue = fieldName.parent.select_one("div[class=field-items]").div
+                # Remove <br>, again NASTY HTML
+                for e in fieldValue.findAll("br"):
+                    e.extract()
 
-            # Find the correct place for the field
-            key = fieldName.string.lower()
-            if key == "navn":
-                self.user.name = fieldValue.string
-            elif key == "adresse":
-                self.user.address = fieldValue.contents
+                # Find the correct place for the field
+                key = fieldName.string.lower()
+                if key == "navn":
+                    self.user.name = fieldValue.string
+                elif key == "adresse":
+                    self.user.address = fieldValue.contents
 
-        # Find the correct <form>, extract info
-        form = soup.select_one(f"form[action='{URLS[USER_PROFILE]}']")
-        self.user.phone = form.select_one("input[name*='phone]']")["value"]
-        self.user.phoneNotify = (
-            int(form.select_one("input[name*='phone_notification']")["value"]) == 1
-        )
-        self.user.mail = form.select_one("input[name*='mail]']")["value"]
-        self.user.mailNotify = (
-            int(form.select_one("input[name*='mail_notification']")["value"]) == 1
-        )
+            # Find the correct <form>, extract info
+            form = soup.select_one(f"form[action='{URLS[USER_PROFILE]}']")
+            self.user.phone = form.select_one("input[name*='phone]']")["value"]
+            self.user.phoneNotify = (
+                int(form.select_one("input[name*='phone_notification']")["value"]) == 1
+            )
+            self.user.mail = form.select_one("input[name*='mail]']")["value"]
+            self.user.mailNotify = (
+                int(form.select_one("input[name*='mail_notification']")["value"]) == 1
+            )
 
-        # Find our preferred library, when found break the loop
-        for library in form.select_one("select[name*='preferred_branch']").find_all(
-            "option"
-        ):
-            if "selected" in library.attrs:
-                self.user.pickupLibrary = library.string
-                break
+            # Find our preferred library, when found break the loop
+            for library in form.select_one("select[name*='preferred_branch']").find_all(
+                "option"
+            ):
+                if "selected" in library.attrs:
+                    self.user.pickupLibrary = library.string
+                    break
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error(
+                "Error getting user info (%s). Error: (%s)",
+                self.host + URLS[USER_PROFILE],
+                err,
+            )
 
         if DEBUG:
             _LOGGER.debug(
-                f"({self.user.userId[:-4]}) is actually '{self.user.name}'. Pickup library is {self.user.pickupLibrary}"
+                "(%s) is actually '%s'. Pickup library is %s",
+                self.user.userId[:-4],
+                self.user.name,
+                self.user.pickupLibrary,
             )
 
     # Get the loans with all possible details
@@ -428,13 +521,13 @@ class Library:
             tempList.append(obj)
 
         if DEBUG:
-            _LOGGER.debug(f"{self.user.name} has {len(tempList)} loans")
+            _LOGGER.debug("%s has %s loans", self.user.name, len(tempList))
 
         return tempList
 
     def fetchLoansOverdue(self):
         if DEBUG:
-            _LOGGER.debug(f"{self.user.name}, Reusing the fetchLoans function...")
+            _LOGGER.debug("%s, Reusing the fetchLoans function", self.user.name)
         # Fetch the loans overdue page
         return self.fetchLoans(self._fetchPage(self.host + URLS[LOANS_OVERDUE]))
 
@@ -473,7 +566,7 @@ class Library:
             tempList.append(obj)
 
         if DEBUG:
-            _LOGGER.debug(f"{self.user.name} has {len(tempList)} reservations")
+            _LOGGER.debug("%s has %s reservations", self.user.name, len(tempList))
 
         return tempList
 
@@ -513,7 +606,7 @@ class Library:
 
         if DEBUG:
             _LOGGER.debug(
-                f"{self.user.name} has {len(tempList)} reservations ready for pickup"
+                "%s has %s reservations ready for pickup", self.user.name, len(tempList)
             )
 
         return tempList
@@ -548,12 +641,17 @@ class Library:
 
             tempList.append(obj)
 
-        amount = soup.select_one("span[class='amount']")
-        amount = self._removeCurrency(amount.string) if amount else 0.0
+        try:
+            amount = soup.select_one("span[class='amount']")
+            amount = self._removeCurrency(amount.string) if amount else 0.0
+        except (AttributeError, KeyError) as err:
+            _LOGGER.error("Error processing the debt amount. Error: (%s)", err)
 
         if DEBUG:
             _LOGGER.debug(
-                f"{self.user.name} has {len(tempList)} debts with a total of {amount}"
+                "%s has %s debts with a total of {amount}",
+                self.user.name,
+                len(tempList),
             )
 
         return tempList, amount
@@ -568,7 +666,7 @@ class libraryUser:
     eBooks, eBooksQuota, audioBooks, audioBooksQuota = 0, 0, 0, 0
     pickupLibrary = None
 
-    def __init__(self, userId: str, pincode: str):
+    def __init__(self, userId: str, pincode: str) -> None:
         self.userInfo = {"userId": userId, "pincode": pincode}
         self.userId = userId
 

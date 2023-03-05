@@ -106,54 +106,101 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
 
         # Fetch the list of libraries from a "fallback" loginpage
-        def refreshLibraries():
-            session = requests.Session()
-            session.headers = HEADERS
-            r = session.get(URL_FALLBACK + URL_LOGIN_PAGE)
-            soup = BS(r.text, "html.parser")
-            librariesJSON = json.loads(
-                soup.find(
-                    "script",
-                    text=re.compile(r"^var libraries = (.)", re.MULTILINE | re.DOTALL),
-                ).string.replace("var libraries = ", "")
-            )
-
-            libraries = {}
-            for library in librariesJSON["folk"]:
-                p = re.compile("^.+?[^\/:](?=[?\/]|$)")
-                m = p.match(library["registrationUrl"])
-                libraries[library[CONF_NAME]] = {
-                    CONF_AGENCY: library[CONF_BRANCH_ID],
-                    CONF_HOST: m.group(),
-                }
-
-            return libraries
-
-        def municipalityFromCoor(lon, lat, libraries):
+        def refreshLibraries() -> tuple:
             session = requests.Session()
             session.headers = HEADERS
 
-            r = session.get(
-                MUNICIPALITY_LOOKUP_URL.replace("LON", str(lon)).replace(
-                    "LAT", str(lat)
+            try:
+                r = session.get(URL_FALLBACK + URL_LOGIN_PAGE)
+                r.raise_for_status()
+
+            except requests.exceptions.HTTPError as err:
+                raise SystemExit(err) from err
+            except requests.exceptions.Timeout:
+                _LOGGER.error("Timeout fecthing (%s)", URL_FALLBACK + URL_LOGIN_PAGE)
+            except requests.exceptions.TooManyRedirects:
+                _LOGGER.error(
+                    "Too many redirects fecthing (%s)", URL_FALLBACK + URL_LOGIN_PAGE
                 )
-            )
+            except requests.exceptions.RequestException as err:
+                raise SystemExit(err) from err
+
+            try:
+                soup = BS(r.text, "html.parser")
+                librariesJSON = json.loads(
+                    soup.find(
+                        "script",
+                        text=re.compile(
+                            r"^var libraries = (.)", re.MULTILINE | re.DOTALL
+                        ),
+                    ).string.replace("var libraries = ", "")
+                )
+            except (AttributeError, KeyError) as err:
+                _LOGGER.error(
+                    "Error loading the libraries from the fallback url. Error: %s", err
+                )
+
+            libraries, excLibraries = {}, {}
+            if "folk" in librariesJSON.keys():
+                for library in librariesJSON["folk"]:
+                    p = re.compile("^.+?[^\/:](?=[?\/]|$)")
+                    m = p.match(library["registrationUrl"])
+                    # Only use libraries NOT using gatewayf
+                    if "gatewayf" not in library["registrationUrl"]:
+                        libraries[library[CONF_NAME]] = {
+                            CONF_AGENCY: library[CONF_BRANCH_ID],
+                            CONF_HOST: m.group(),
+                        }
+                    else:
+                        excLibraries[library[CONF_NAME]] = {
+                            CONF_AGENCY: library[CONF_BRANCH_ID],
+                            CONF_HOST: m.group(),
+                        }
+
+            return libraries, excLibraries
+
+        def municipalityFromCoor(lon, lat):
+            session = requests.Session()
+            session.headers = HEADERS
+
+            try:
+                r = session.get(
+                    MUNICIPALITY_LOOKUP_URL.replace("LON", str(lon)).replace(
+                        "LAT", str(lat)
+                    )
+                )
+                r.raise_for_status()
+
+            except requests.exceptions.HTTPError as err:
+                raise SystemExit(err) from err
+            except requests.exceptions.Timeout:
+                _LOGGER.error("Timeout fecthing (%s)", URL_FALLBACK + URL_LOGIN_PAGE)
+            except requests.exceptions.TooManyRedirects:
+                _LOGGER.error(
+                    "Too many redirects fecthing (%s)", URL_FALLBACK + URL_LOGIN_PAGE
+                )
+            except requests.exceptions.RequestException as err:
+                raise SystemExit(err) from err
+
             municipality = json.loads(r.text)
-            if "navn" in municipality and municipality["navn"] in libraries.keys():
-                return municipality["navn"]
-            return ""
+            return municipality["navn"] if "navn" in municipality else ""
 
         # Async fetch list of "folk" libraries
-        libraries = await self.hass.async_add_executor_job(refreshLibraries)
-
-        municipality = await self.hass.async_add_executor_job(
-            municipalityFromCoor,
-            self.hass.config.longitude,
-            self.hass.config.latitude,
-            libraries,
+        libraries, excLibraries = await self.hass.async_add_executor_job(
+            refreshLibraries
         )
 
         errors = {}
+        try:
+            municipality = await self.hass.async_add_executor_job(
+                municipalityFromCoor,
+                self.hass.config.longitude,
+                self.hass.config.latitude,
+            )
+            if municipality in excLibraries.keys():
+                raise gatewayf
+        except gatewayf:
+            errors["base"] = "gatewayf"
 
         if user_input is not None:
             try:
@@ -164,7 +211,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
@@ -196,6 +243,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
         )
+
+
+class gatewayf(HomeAssistantError):
+    """Error to indicate municipality is using gatewayf."""
 
 
 class UserExist(HomeAssistantError):

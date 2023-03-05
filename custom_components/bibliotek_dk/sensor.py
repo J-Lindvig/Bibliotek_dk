@@ -1,4 +1,3 @@
-"""Platform for sensor integration."""
 from __future__ import annotations
 
 import logging
@@ -48,7 +47,8 @@ async def async_setup_entry(
             ):
                 waitTime = random.randint(5, 10)
                 _LOGGER.debug(
-                    f"Instance of Library already running, waiting {waitTime} seconds before next probing..."
+                    "Instance of Library already running, waiting %s seconds before next probing",
+                    waitTime,
                 )
                 await asyncio.sleep(waitTime)
 
@@ -69,7 +69,6 @@ async def async_setup_entry(
     # Immediate refresh
     await coordinator.async_request_refresh()
 
-    """Add sensor entry."""
     sensors = []
 
     # Library
