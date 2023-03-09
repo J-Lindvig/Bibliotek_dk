@@ -230,7 +230,7 @@ class Library:
         try:
             if materialTitle:
                 materialTitle = materialTitle.string
-            if "(" in materialTitle:
+            if materialTitle and "(" in materialTitle:
                 materialTitle = materialTitle.split("(")[0].strip()
         except (AttributeError, KeyError) as err:
             _LOGGER.error("Error searching for the title. Error: %s", err)
