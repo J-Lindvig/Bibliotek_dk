@@ -222,17 +222,21 @@ class Library:
         )
 
     def _getMaterialInfo(self, material) -> tuple:
+        materialTitle, materialCreators, materialType = "", "", ""
         # Some title have the type in "()", remove it
         # by splitting the string by the first "(" and use
         # only the first element, stripping whitespaces
+        materialTitle = material.select_one("[class*='item-title']")
         try:
-            materialTitle = material.h3.string.split("(")[0].strip()
+            if materialTitle:
+                materialTitle = materialTitle.string
+            if "(" in materialTitle:
+                materialTitle = materialTitle.split("(")[0].strip()
         except (AttributeError, KeyError) as err:
-            _LOGGER.error("Error searching for the <h3> tag. Error: %s", err)
+            _LOGGER.error("Error searching for the title. Error: %s", err)
 
         # Assume it is a physical loan
         materialType = material.select_one("div[class=item-material-type]")
-
         try:
             if materialType:
                 materialType = materialType.string
