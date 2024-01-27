@@ -125,7 +125,7 @@ class Library:
             r.raise_for_status()
 
         except requests.exceptions.HTTPError as err:
-            raise SystemExit(err) from err
+            _LOGGER.error("HTTPError (%s)", err)
         except requests.exceptions.Timeout:
             _LOGGER.error("Timeout fecthing (%s)", url)
         except requests.exceptions.TooManyRedirects:
