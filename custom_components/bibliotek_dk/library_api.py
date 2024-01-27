@@ -671,7 +671,7 @@ class libraryUser:
     pickupLibrary = None
 
     def __init__(self, userId: str, pincode: str) -> None:
-        self.userInfo = {"userId": userId, "pincode": pincode}
+        self.userInfo = {"loginBibDkUserId": userId, "pincode": pincode}
         self.userId = userId
 
 
