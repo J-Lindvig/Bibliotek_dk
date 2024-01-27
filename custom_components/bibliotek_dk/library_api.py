@@ -518,6 +518,8 @@ class Library:
                     obj.loanDate = self._getDatetime(value)
                 elif "expire-date" in keys:
                     obj.expireDate = self._getDatetime(value)
+                elif "expected-date" in keys:
+                    obj.expireDate = self._getDatetime(value)
                 elif "material-number" in keys:
                     obj.id = value
 
