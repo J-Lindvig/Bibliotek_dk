@@ -166,6 +166,10 @@ class Library:
 
         # Unpack into separate elements
         d, m, y = date
+
+        # Check that a date was received
+        if not d.isnumeric(): return None
+        
         # Cut the name of the month to the first 3 chars
         m = m[:3]
         # Change the few danish month to english
