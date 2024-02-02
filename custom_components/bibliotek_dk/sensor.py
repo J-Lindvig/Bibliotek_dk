@@ -120,9 +120,10 @@ class LibrarySensor(SensorEntity):
     @property
     def state(self):
         if len(self.myLibrary.user.loans) > 0:
-            return (
-                self.myLibrary.user.loans[0].expireDate.date() - datetime.now().date()
-            ).days
+            if self.myLibrary.user.loans[0].expireDate is not None: # eReolen reservation in Queue
+                return (
+                    self.myLibrary.user.loans[0].expireDate.date() - datetime.now().date()
+                ).days
         return ""
 
     @property
