@@ -125,13 +125,18 @@ class Library:
             r.raise_for_status()
 
         except requests.exceptions.HTTPError as err:
-            _LOGGER.error("HTTPError (%s)", err)
+            _LOGGER.error(f"HTTP Error while fetching {url}: {err}")
+            # Handle the error as needed, e.g., raise it, log it, or notify the user.
+            return None if return_r else None, None 
         except requests.exceptions.Timeout:
             _LOGGER.error("Timeout fecthing (%s)", url)
+            return None if return_r else None, None
         except requests.exceptions.TooManyRedirects:
             _LOGGER.error("Too many redirects fecthing (%s)", url)
+            return None if return_r else None, None
         except requests.exceptions.RequestException as err:
-            raise SystemExit(err) from err
+            _LOGGER.error(f"Request Exception while fetching {url}: {err}")
+            return None if return_r else None, None
 
         if return_r:
             return BS(r.text, "html.parser"), r
