@@ -167,8 +167,9 @@ class Library:
         # Unpack into separate elements
         d, m, y = date
 
-        # Check that a date was received
-        if not d.isnumeric(): return None
+        # Check that there actually is a date
+        _LOGGER.debug("Day (%s) is numeric: (%s)",d,d.split(".")[0].isnumeric())
+        if not d.split(".")[0].isnumeric(): return None
         
         # Cut the name of the month to the first 3 chars
         m = m[:3]
@@ -190,17 +191,18 @@ class Library:
 
     def sortLists(self):
         # Sort the loans by expireDate and the Title
-        self.user.loans.sort(key=lambda obj: (obj.expireDate, obj.title))
+        self.user.loans.sort(key=lambda obj: (obj.expireDate is None, obj.expireDate, obj.title))
         # Sort the reservations
         self.user.reservations.sort(
             key=lambda obj: (
+                obj.createdDate is None, 
                 obj.queueNumber,
                 obj.createdDate,
                 obj.title,
             )
         )
         # Sort the reservations
-        self.user.reservationsReady.sort(key=lambda obj: (obj.pickupDate, obj.title))
+        self.user.reservationsReady.sort(key=lambda obj: (obj.pickupDate is None, obj.pickupDate, obj.title))
 
     def _getMaterials(self, soup, noodle="div[class*='material-item']") -> BS:
         try:
