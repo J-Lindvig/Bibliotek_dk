@@ -125,13 +125,18 @@ class Library:
             r.raise_for_status()
 
         except requests.exceptions.HTTPError as err:
-            raise SystemExit(err) from err
+            _LOGGER.error(f"HTTP Error while fetching {url}: {err}")
+            # Handle the error as needed, e.g., raise it, log it, or notify the user.
+            return None if return_r else None, None 
         except requests.exceptions.Timeout:
             _LOGGER.error("Timeout fecthing (%s)", url)
+            return None if return_r else None, None
         except requests.exceptions.TooManyRedirects:
             _LOGGER.error("Too many redirects fecthing (%s)", url)
+            return None if return_r else None, None
         except requests.exceptions.RequestException as err:
-            raise SystemExit(err) from err
+            _LOGGER.error(f"Request Exception while fetching {url}: {err}")
+            return None if return_r else None, None
 
         if return_r:
             return BS(r.text, "html.parser"), r
@@ -518,6 +523,8 @@ class Library:
                     obj.loanDate = self._getDatetime(value)
                 elif "expire-date" in keys:
                     obj.expireDate = self._getDatetime(value)
+                elif "expected-date" in keys:
+                    obj.expireDate = self._getDatetime(value)
                 elif "material-number" in keys:
                     obj.id = value
 
@@ -671,7 +678,7 @@ class libraryUser:
     pickupLibrary = None
 
     def __init__(self, userId: str, pincode: str) -> None:
-        self.userInfo = {"userId": userId, "pincode": pincode}
+        self.userInfo = {"loginBibDkUserId": userId, "pincode": pincode}
         self.userId = userId
 
 
