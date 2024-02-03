@@ -41,6 +41,15 @@ URLS = {
     USER_PROFILE: "/user/me/edit",
 }
 
+### IDENTIFIERS FOR CONTENT DIVS
+DIVS = {
+    DEBTS: "pane-debts",
+    LOANS: "pane-loans",
+    LOANS_OVERDUE: "pane-loans",
+    RESERVATIONS: "pane-reservations",
+    RESERVATIONS_READY: "pane-reservations",
+}
+
 #### SEARCH STRINGS
 LOGGED_IN = "logget ind"
 LOGGED_IN_ELIB = "Logged-in"
