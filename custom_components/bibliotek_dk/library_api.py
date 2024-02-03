@@ -206,8 +206,9 @@ class Library:
         # Sort the reservations
         self.user.reservations.sort(
             key=lambda obj: (
-                obj.createdDate is None, 
+                obj.queueNumber is None,
                 obj.queueNumber,
+                obj.createdDate is None,
                 obj.createdDate,
                 obj.title,
             )
