@@ -109,7 +109,7 @@ class Library:
                         self.fecthELibUsedQuota(soup)
                         self.user.loans.extend(self.fetchLoans(soup))
                         self.user.reservations.extend(self.fetchReservations(soup))
-                        self.user.reservationsready.extend(self.fetchReservationsReady(soup))
+                        self.user.reservationsReady.extend(self.fetchReservationsReady(soup))
 
                     # Logout of eReolen
                     self.logout(self.host_elib + URLS[LOGOUT_ELIB])
