@@ -108,6 +108,8 @@ class Library:
                     if soup:
                         self.fecthELibUsedQuota(soup)
                         self.user.loans.extend(self.fetchLoans(soup))
+                        self.user.reservations.extend(self.fetchReservations(soup))
+                        self.user.reservationsready.extend(self.fetchReservationsReady(soup))
 
                     # Logout of eReolen
                     self.logout(self.host_elib + URLS[LOGOUT_ELIB])
@@ -511,7 +513,7 @@ class Library:
             )
 
     # Get the loans with all possible details
-    def fetchLoans(self, soup=None):
+    def fetchLoans(self, soup=None) -> list:
         # Fetch the loans page
         if not soup:
             soup = self._fetchPage(self.host + URLS[LOANS])
@@ -519,7 +521,7 @@ class Library:
         # From the <div> containing part of the class
         # for material in soup.select("div[class*='material-item']"):
         tempList = []
-        for material in self._getMaterials(soup):
+        for material in self._getMaterials(soup.find("div", class_=DIVS[LOANS])):
             # Create an instance of libraryLoan
             obj = libraryLoan()
 
@@ -538,8 +540,6 @@ class Library:
                     obj.loanDate = self._getDatetime(value)
                 elif "expire-date" in keys:
                     obj.expireDate = self._getDatetime(value)
-                elif "expected-date" in keys:
-                    obj.expireDate = self._getDatetime(value)
                 elif "material-number" in keys:
                     obj.id = value
 
@@ -551,20 +551,22 @@ class Library:
 
         return tempList
 
-    def fetchLoansOverdue(self):
+    def fetchLoansOverdue(self) -> list:
         if DEBUG:
             _LOGGER.debug("%s, Reusing the fetchLoans function", self.user.name)
         # Fetch the loans overdue page
         return self.fetchLoans(self._fetchPage(self.host + URLS[LOANS_OVERDUE]))
 
     # Get the current reservations
-    def fetchReservations(self):
+    def fetchReservations(self, soup=None) -> list:
         # Fecth the reservations page
-        soup = self._fetchPage(self.host + URLS[RESERVATIONS])
+        if not soup:
+            soup = self._fetchPage(self.host + URLS[RESERVATIONS])
 
         tempList = []
         # From the <div> with containg the class of the materials
-        for material in self._getMaterials(soup):
+        _LOGGER.debug("Number of divs (%s): (%d)",DIVS[RESERVATIONS],len(soup.select("."+DIVS[RESERVATIONS])))
+        for material in self._getMaterials(soup.find_all("div", class_=DIVS[RESERVATIONS])[len(soup.select("."+DIVS[RESERVATIONS]))-1]):
             # Create a instance of libraryReservation
             obj = libraryReservation()
 
@@ -597,13 +599,14 @@ class Library:
         return tempList
 
     # Get the reservations which are ready
-    def fetchReservationsReady(self) -> list:
+    def fetchReservationsReady(self, soup=None) -> list:
         # Fecth the ready reservationsReady page
-        soup = self._fetchPage(self.host + URLS[RESERVATIONS_READY])
+        if not soup:
+            soup = self._fetchPage(self.host + URLS[RESERVATIONS_READY])
 
         tempList = []
         # From the <div> with the materials
-        for material in self._getMaterials(soup):
+        for material in self._getMaterials(soup.find("div", class_=DIVS[RESERVATIONS_READY])):
             # Create a instance of libraryReservationReady
             obj = libraryReservationReady()
 
