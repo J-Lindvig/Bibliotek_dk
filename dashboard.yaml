@@ -172,3 +172,27 @@ views:
                 ---
               {% endfor %}
             title: Biblioteksreservationer til afhentning
+          - type: markdown
+            content: |-
+              {# CHANGE BELOW #}
+              {% set libraryUsers = states.sensor 
+                | selectattr('attributes.reservations', 'defined') 
+                | selectattr('attributes.address', 'defined')
+                | rejectattr('state', 'eq', '0')
+                | map(attribute='entity_id')
+                | list %}
+              {% set headers = ['', 'Titel', 'Type', 'Udløber', 'Bibliotek'] %}
+              {% set trim = 32 %}
+              {% set userStr = '### USER' %}
+            
+              {# PRIVATE #}
+              ---
+              {% for libraryUser in libraryUsers -%}
+                {{ userStr.replace('USER', state_attr(libraryUser, 'user'))}}
+                |Type|Brugt|
+                |---:|---:|
+                | eBøger | {{ state_attr(libraryUser, 'ebooks') }}/{{ state_attr(libraryUser, 'ebooks_quota') }} |
+                | Lydbøger | {{ state_attr(libraryUser, 'audiobooks') }}/{{ state_attr(libraryUser, 'audiobooks_quota') }} |
+                ---
+              {% endfor %}
+            title: eReol Status
