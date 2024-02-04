@@ -184,15 +184,11 @@ views:
               {% set headers = ['', 'Titel', 'Type', 'Udløber', 'Bibliotek'] %}
               {% set trim = 32 %}
               {% set userStr = '### USER' %}
-            
+              
               {# PRIVATE #}
-              ---
+                |Navn|eBøger|Lydbøger|
+                |:---|---:|--:|
               {% for libraryUser in libraryUsers -%}
-                {{ userStr.replace('USER', state_attr(libraryUser, 'user'))}}
-                |Type|Brugt|
-                |---:|---:|
-                | eBøger | {{ state_attr(libraryUser, 'ebooks') }}/{{ state_attr(libraryUser, 'ebooks_quota') }} |
-                | Lydbøger | {{ state_attr(libraryUser, 'audiobooks') }}/{{ state_attr(libraryUser, 'audiobooks_quota') }} |
-                ---
+                | {{ state_attr(libraryUser, 'user')}} | {{ state_attr(libraryUser, 'ebooks') }}/{{ state_attr(libraryUser, 'ebooks_quota') }} | {{ state_attr(libraryUser, 'audiobooks') }}/{{ state_attr(libraryUser, 'audiobooks_quota') }} |
               {% endfor %}
             title: eReol Status
