@@ -1,0 +1,194 @@
+title: Bibliotek
+views:
+  - title: Home
+    badges: []
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |-
+              {# CHANGE BELOW #}
+              {% set libraryUsers = states.sensor 
+                | selectattr('attributes.loans_overdue', 'defined') 
+                | rejectattr('attributes.address', 'defined')
+                | rejectattr('state', 'eq', '0')
+                | map(attribute='entity_id')
+                | list %}
+              {% set headers = ['', 'Titel', 'Type', 'Afleveres'] %}
+              {% set trim = 32 %}
+              {% set userStr = '### USER (X lån)' %}
+              {% set dateStr = 'om X DAYS (DATE)' %}
+              {% set dateFormat = '%-d/%-m' %}
+
+              {# PRIVATE #}
+              {% set ts_now = now() | as_timestamp %}
+              ---
+              {% for libraryUser in libraryUsers -%}
+                {% set amount = state_attr(libraryUser, 'loans_overdue') | length %}
+                {% if amount > 0 %}
+                {{ userStr.replace('USER', state_attr(libraryUser, 'user')).replace('X', amount~'')}}
+                |{{ headers | join(' | ') }}|
+                |--:|:--|:--|--:|
+                {%- for loan in state_attr(libraryUser, 'loans_overdue') %}
+                {%- set days = (loan.expire_date | as_timestamp - ts_now) | timestamp_custom('%-d' ) | int(0)%}
+                {%- set returnStr = dateStr.replace('X', days~'' ).replace('DAYS', 'dag'~('e' if days > 1 else '')).replace('DATE', loan.expire_date | as_timestamp | timestamp_custom(dateFormat)) %}
+                |{{ loop.index }}|{{ loan.title | truncate(trim, true) }}|{% if loan.type != '' %}({{loan.type}}){% endif %}|{{ returnStr }}|
+                {%- endfor %}
+                {% endif  %}
+                ---
+              {% endfor %}
+            title: Bibliotekslån Overskredet
+          - type: markdown
+            content: |-
+              {# CHANGE BELOW #}
+              {% set libraryUsers = states.sensor 
+                | selectattr('attributes.debts', 'defined') 
+                | rejectattr('attributes.address', 'defined')
+                | rejectattr('state', 'eq', '0.0')
+                | map(attribute='entity_id')
+                | list %}
+              {% set headers = ['', 'Titel', 'Type', 'Beløb'] %}
+              {% set trim = 32 %}
+              {% set userStr = '### USER (X kr)' %}
+              {% set dateStr = 'X kr (DATE)' %}
+              {% set dateFormat = '%-d/%-m' %}
+
+              {# PRIVATE #}
+              ---
+              {% for libraryUser in libraryUsers -%}
+                {% set amount = states(libraryUser)|float %}
+                {% if amount > 0 %}
+                {{ userStr.replace('USER', state_attr(libraryUser, 'user')).replace('X', amount~'')}}
+                |{{ headers | join(' | ') }}|
+                |--:|:--|:--|--:|
+                {%- for loan in state_attr(libraryUser, 'debts') %}
+                {%- set returnStr = dateStr.replace('X', loan.fee_amount~'' ).replace('DATE', loan.fee_date | as_timestamp | timestamp_custom(dateFormat)) %}
+                |{{ loop.index }}|{% if loan.title %}{{ loan.title | truncate(trim, true) }}{% else %}{{'Flere materialer'}}{% endif %}|{% if loan.type != '' %}({{loan.type}}){% endif %}|{{ returnStr }}|
+                {%- endfor %}
+                {% endif  %}
+                ---
+              {% endfor %}
+            title: Gebyrer
+      - type: markdown
+        title: Bibliotekslån
+        content: |-
+          {# CHANGE BELOW #}
+          {% set libraryUsers = states.sensor 
+            | selectattr('attributes.loans', 'defined') 
+            | rejectattr('attributes.address', 'defined')
+            | rejectattr('state', 'eq', '0')
+            | map(attribute='entity_id')
+            | list %}
+          {% set headers = ['', 'Titel', 'Type', 'Afleveres'] %}
+          {% set trim = 32 %}
+          {% set userStr = '### USER (X lån)' %}
+          {% set dateStr = 'om X DAYS (DATE)' %}
+          {% set dateFormat = '%-d/%-m' %}
+
+          {# PRIVATE #}
+          {% set ts_now = now() | as_timestamp %}
+          ---
+          {% for libraryUser in libraryUsers -%}
+            {% set amount = state_attr(libraryUser, 'loans') | length %}
+            {% if amount > 0 %}
+            {{ userStr.replace('USER', state_attr(libraryUser, 'user')).replace('X', amount~'')}}
+            |{{ headers | join(' | ') }}|
+            |--:|:--|:--|--:|
+            {%- for loan in state_attr(libraryUser, 'loans') %}
+            {%- set days = (loan.expire_date | as_timestamp - ts_now) | timestamp_custom('%-d' ) | int(0)%}
+            {%- set returnStr = dateStr.replace('X', days~'' ).replace('DAYS', 'dag'~('e' if days > 1 else '')).replace('DATE', loan.expire_date | as_timestamp | timestamp_custom(dateFormat)) %}
+            |{{ loop.index }}|{{ loan.title | truncate(trim, true) }}|{% if loan.type != '' %}({{loan.type}}){% endif %}|{{ returnStr }}|
+            {%- endfor %}
+            {% endif  %}
+            ---
+          {% endfor %}
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |-
+              {# CHANGE BELOW #}
+              {% set libraryUsers = states.sensor 
+                | selectattr('attributes.reservations', 'defined') 
+                | rejectattr('attributes.address', 'defined')
+                | rejectattr('state', 'eq', '0')
+                | map(attribute='entity_id')
+                | list %}
+              {% set headers = ['', 'Titel', 'Type', 'Udløber', 'Bibliotek'] %}
+              {% set trim = 32 %}
+              {% set userStr = '### USER (X reservering)' %}
+              {% set dateStr = 'DATE' %}
+              {% set dateFormat = '%-d/%-m %-Y' %}
+
+              {# PRIVATE #}
+              {% set ts_now = now() | as_timestamp %}
+              ---
+              {% for libraryUser in libraryUsers -%}
+                {% set amount = state_attr(libraryUser, 'reservations') | length %}
+                {% if amount > 0 %}
+                {{ userStr.replace('USER', state_attr(libraryUser, 'user')).replace('X', amount~'')}}
+                |{{ headers | join(' | ') }}|
+                |--:|:--|:--|:--|--:|
+                {%- for loan in state_attr(libraryUser, 'reservations') %}
+                {%- set returnStr = "Kø" %}
+                {%- if loan.expire_date %}
+                {%- set returnStr = dateStr.replace('DATE', loan.expire_date | as_timestamp | timestamp_custom(dateFormat)) %}
+                {%- endif %}
+                |{{ loop.index }}|{{ loan.title | truncate(trim, true) }}|{% if loan.type != '' %}({{loan.type}}){% endif %}|{{ returnStr }}|{{ loan.pickup_library }}|
+                {%- endfor %}
+                {% endif  %}
+                ---
+              {% endfor %}
+            title: Biblioteksreservationer
+          - type: markdown
+            content: |-
+              {# CHANGE BELOW #}
+              {% set libraryUsers = states.sensor 
+                | selectattr('attributes.reservations_ready', 'defined')
+                | rejectattr('attributes.address', 'defined')
+                | rejectattr('state','eq', '0')
+                | map(attribute='entity_id')
+                | list %}
+              {% set headers = ['', 'Titel', 'Type', 'Afhentes', 'Bibliotek'] %}
+              {% set trim = 32 %}
+              {% set userStr = '### USER (X reservering)' %}
+              {% set dateStr = 'om X DAYS (DATE)' %}
+              {% set dateFormat = '%-d/%-m' %}
+
+              {# PRIVATE #}
+              {% set ts_now = now() | as_timestamp %}
+              ---
+              {% for libraryUser in libraryUsers -%}
+                {% set amount = state_attr(libraryUser, 'reservations_ready') | length %}
+                {% if amount > 0 %}
+                {{ userStr.replace('USER', state_attr(libraryUser, 'user')).replace('X', amount~'')}}
+                |{{ headers | join(' | ') }}|
+                |--:|:--|:--|:--|--:|
+                {%- for loan in state_attr(libraryUser, 'reservations_ready') %}
+                {%- set days = (loan.pickup_date | as_timestamp - ts_now) | timestamp_custom('%-d' ) | int(0)%}
+                {%- set returnStr = dateStr.replace('X', days~'' ).replace('DAYS', 'dag'~('e' if days > 1 else '')).replace('DATE', loan.pickup_date | as_timestamp | timestamp_custom(dateFormat)) %}
+                |{{ loop.index }}|{{ loan.title | truncate(trim, true) }}|{% if loan.type != '' %}({{loan.type}}){% endif %}|{{ returnStr }}|{{ loan.pickup_library | truncate(trim, true) }}|
+                {%- endfor %}
+                {% endif  %}
+                ---
+              {% endfor %}
+            title: Biblioteksreservationer til afhentning
+          - type: markdown
+            content: |-
+              {# CHANGE BELOW #}
+              {% set libraryUsers = states.sensor 
+                | selectattr('attributes.reservations', 'defined') 
+                | selectattr('attributes.address', 'defined')
+                | rejectattr('state', 'eq', '0')
+                | map(attribute='entity_id')
+                | list %}
+              {% set headers = ['', 'Titel', 'Type', 'Udløber', 'Bibliotek'] %}
+              {% set trim = 32 %}
+              {% set userStr = '### USER' %}
+              
+              {# PRIVATE #}
+                |Navn|eBøger|Lydbøger|
+                |:---|---:|--:|
+              {% for libraryUser in libraryUsers -%}
+                | {{ state_attr(libraryUser, 'user')}} | {{ state_attr(libraryUser, 'ebooks') }}/{{ state_attr(libraryUser, 'ebooks_quota') }} | {{ state_attr(libraryUser, 'audiobooks') }}/{{ state_attr(libraryUser, 'audiobooks_quota') }} |
+              {% endfor %}
+            title: eReol Status

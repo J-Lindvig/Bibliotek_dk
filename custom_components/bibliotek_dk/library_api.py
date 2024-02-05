@@ -41,6 +41,15 @@ URLS = {
     USER_PROFILE: "/user/me/edit",
 }
 
+### IDENTIFIERS FOR CONTENT DIVS
+DIVS = {
+    DEBTS: "pane-debts",
+    LOANS: "pane-loans",
+    LOANS_OVERDUE: "pane-loans",
+    RESERVATIONS: "pane-reservations",
+    RESERVATIONS_READY: "pane-reservations",
+}
+
 #### SEARCH STRINGS
 LOGGED_IN = "logget ind"
 LOGGED_IN_ELIB = "Logged-in"
@@ -99,6 +108,8 @@ class Library:
                     if soup:
                         self.fecthELibUsedQuota(soup)
                         self.user.loans.extend(self.fetchLoans(soup))
+                        self.user.reservations.extend(self.fetchReservations(soup))
+                        self.user.reservationsReady.extend(self.fetchReservationsReady(soup))
 
                     # Logout of eReolen
                     self.logout(self.host_elib + URLS[LOGOUT_ELIB])
@@ -125,13 +136,18 @@ class Library:
             r.raise_for_status()
 
         except requests.exceptions.HTTPError as err:
-            raise SystemExit(err) from err
+            _LOGGER.error(f"HTTP Error while fetching {url}: {err}")
+            # Handle the error as needed, e.g., raise it, log it, or notify the user.
+            return None if return_r else None, None 
         except requests.exceptions.Timeout:
             _LOGGER.error("Timeout fecthing (%s)", url)
+            return None if return_r else None, None
         except requests.exceptions.TooManyRedirects:
             _LOGGER.error("Too many redirects fecthing (%s)", url)
+            return None if return_r else None, None
         except requests.exceptions.RequestException as err:
-            raise SystemExit(err) from err
+            _LOGGER.error(f"Request Exception while fetching {url}: {err}")
+            return None if return_r else None, None
 
         if return_r:
             return BS(r.text, "html.parser"), r
@@ -161,6 +177,11 @@ class Library:
 
         # Unpack into separate elements
         d, m, y = date
+
+        # Check that there actually is a date
+        _LOGGER.debug("Day (%s) is numeric: (%s)",d,d.split(".")[0].isnumeric())
+        if not d.split(".")[0].isnumeric(): return None
+        
         # Cut the name of the month to the first 3 chars
         m = m[:3]
         # Change the few danish month to english
@@ -181,17 +202,19 @@ class Library:
 
     def sortLists(self):
         # Sort the loans by expireDate and the Title
-        self.user.loans.sort(key=lambda obj: (obj.expireDate, obj.title))
+        self.user.loans.sort(key=lambda obj: (obj.expireDate is None, obj.expireDate, obj.title))
         # Sort the reservations
         self.user.reservations.sort(
             key=lambda obj: (
+                obj.queueNumber is None,
                 obj.queueNumber,
+                obj.createdDate is None,
                 obj.createdDate,
                 obj.title,
             )
         )
         # Sort the reservations
-        self.user.reservationsReady.sort(key=lambda obj: (obj.pickupDate, obj.title))
+        self.user.reservationsReady.sort(key=lambda obj: (obj.pickupDate is None, obj.pickupDate, obj.title))
 
     def _getMaterials(self, soup, noodle="div[class*='material-item']") -> BS:
         try:
@@ -491,7 +514,7 @@ class Library:
             )
 
     # Get the loans with all possible details
-    def fetchLoans(self, soup=None):
+    def fetchLoans(self, soup=None) -> list:
         # Fetch the loans page
         if not soup:
             soup = self._fetchPage(self.host + URLS[LOANS])
@@ -499,7 +522,7 @@ class Library:
         # From the <div> containing part of the class
         # for material in soup.select("div[class*='material-item']"):
         tempList = []
-        for material in self._getMaterials(soup):
+        for material in self._getMaterials(soup.find("div", class_=DIVS[LOANS])):
             # Create an instance of libraryLoan
             obj = libraryLoan()
 
@@ -529,20 +552,22 @@ class Library:
 
         return tempList
 
-    def fetchLoansOverdue(self):
+    def fetchLoansOverdue(self) -> list:
         if DEBUG:
             _LOGGER.debug("%s, Reusing the fetchLoans function", self.user.name)
         # Fetch the loans overdue page
         return self.fetchLoans(self._fetchPage(self.host + URLS[LOANS_OVERDUE]))
 
     # Get the current reservations
-    def fetchReservations(self):
+    def fetchReservations(self, soup=None) -> list:
         # Fecth the reservations page
-        soup = self._fetchPage(self.host + URLS[RESERVATIONS])
+        if not soup:
+            soup = self._fetchPage(self.host + URLS[RESERVATIONS])
 
         tempList = []
         # From the <div> with containg the class of the materials
-        for material in self._getMaterials(soup):
+        _LOGGER.debug("Number of divs (%s): (%d)",DIVS[RESERVATIONS],len(soup.select("."+DIVS[RESERVATIONS])))
+        for material in self._getMaterials(soup.find_all("div", class_=DIVS[RESERVATIONS])[len(soup.select("."+DIVS[RESERVATIONS]))-1]):
             # Create a instance of libraryReservation
             obj = libraryReservation()
 
@@ -575,13 +600,14 @@ class Library:
         return tempList
 
     # Get the reservations which are ready
-    def fetchReservationsReady(self) -> list:
+    def fetchReservationsReady(self, soup=None) -> list:
         # Fecth the ready reservationsReady page
-        soup = self._fetchPage(self.host + URLS[RESERVATIONS_READY])
+        if not soup:
+            soup = self._fetchPage(self.host + URLS[RESERVATIONS_READY])
 
         tempList = []
         # From the <div> with the materials
-        for material in self._getMaterials(soup):
+        for material in self._getMaterials(soup.find("div", class_=DIVS[RESERVATIONS_READY])):
             # Create a instance of libraryReservationReady
             obj = libraryReservationReady()
 
@@ -671,7 +697,7 @@ class libraryUser:
     pickupLibrary = None
 
     def __init__(self, userId: str, pincode: str) -> None:
-        self.userInfo = {"userId": userId, "pincode": pincode}
+        self.userInfo = {"loginBibDkUserId": userId, "pincode": pincode}
         self.userId = userId
 
 
