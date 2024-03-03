@@ -652,7 +652,7 @@ class Library:
             obj = libraryDebt()
 
             # Get the first element (id)
-            obj.id = self._getIdInfo(material)[0]
+            # obj.id = self._getIdInfo(material)[0]
 
             # URL and image
             obj.url, obj.coverUrl = self._getMaterialUrls(material)
