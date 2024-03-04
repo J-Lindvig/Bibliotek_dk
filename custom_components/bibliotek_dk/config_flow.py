@@ -172,7 +172,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 r.raise_for_status()
 
             except requests.exceptions.HTTPError as err:
-                raise SystemExit(err) from err
+                _LOGGER.error(f"HTTP Error while fetching (%s): {err}",URL_FALLBACK + URL_LOGIN_PAGE)
+                # Handle the error as needed, e.g., raise it, log it, or notify the user.
+                return ""
             except requests.exceptions.Timeout:
                 _LOGGER.error("Timeout fecthing (%s)", URL_FALLBACK + URL_LOGIN_PAGE)
             except requests.exceptions.TooManyRedirects:
@@ -180,7 +182,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "Too many redirects fecthing (%s)", URL_FALLBACK + URL_LOGIN_PAGE
                 )
             except requests.exceptions.RequestException as err:
-                raise SystemExit(err) from err
+                _LOGGER.error(f"Request Exception while fetching (%s): {err}",URL_FALLBACK + URL_LOGIN_PAGE)
+                return ""
 
             municipality = json.loads(r.text)
             return municipality["navn"] if "navn" in municipality else ""
